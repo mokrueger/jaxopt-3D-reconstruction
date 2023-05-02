@@ -1,0 +1,10 @@
+numpy
+scipy
+tqdm
+matplotlib
+blender-plots
+git+https://github.com/Linusnie/robust-triangulation-relaxations.git
+ipympl
+ipykernel
+blender-notebook
+opencv-python
