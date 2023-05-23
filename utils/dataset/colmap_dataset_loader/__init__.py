@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 from dataset import DatasetEntry, ImageMetadata, Point2D, Point3D, Camera, Dataset
-from dataset.colmap_dataset_loader.cameras import read_cameras_bin, read_cameras_txt
+from dataset.colmap_dataset_loader.cameras import read_cameras_bin, read_cameras_txt, CameraModelType
 from dataset.colmap_dataset_loader.images import read_images_bin, read_images_txt
 from dataset.colmap_dataset_loader.points import read_points3d_bin, read_points3d_txt
 from dataset.datacontainers import CameraIntrinsics
@@ -37,17 +37,15 @@ def _get_image_width_height(image_path):
     return width, height
 
 
-def load_colmap_dataset(path_to_sparse_folder, path_to_images):
-    files = os.listdir(path_to_sparse_folder)
-    file_format = Path(files[0]).suffix
-    if file_format.lower() == ".bin":
-        points = read_points3d_bin(path_to_sparse_folder + "/points3D.bin")
-        images = read_images_bin(path_to_sparse_folder + "/images.bin")
-        cameras = read_cameras_bin(path_to_sparse_folder + "/cameras.bin")
+def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False):
+    if binary:
+        points = read_points3d_bin(os.path.join(path_to_sparse_folder, "points3D.bin"))
+        images = read_images_bin(os.path.join(path_to_sparse_folder, "images.bin"))
+        cameras = read_cameras_bin(os.path.join(path_to_sparse_folder, "cameras.bin"))
     else:
-        points = read_points3d_txt(path_to_sparse_folder + "/points3D.txt")
-        images = read_images_txt(path_to_sparse_folder + "/images.txt")
-        cameras = read_cameras_txt(path_to_sparse_folder + "/cameras.txt")
+        points = read_points3d_txt(os.path.join(path_to_sparse_folder, "points3D.txt"))
+        images = read_images_txt(os.path.join(path_to_sparse_folder, "images.txt"))
+        cameras = read_cameras_txt(os.path.join(path_to_sparse_folder, "cameras.txt"))
 
     points3D = list(map(lambda p: Point3D(
         p.point_information.point3d_id,
@@ -81,7 +79,8 @@ def load_colmap_dataset(path_to_sparse_folder, path_to_images):
                                                                          identifier=Path(
                                                                              im.image_information.name).name,
                                                                          coordinate_system=CoordinateSystem.COLMAP,
-                                                                         direction=TransformationDirection.C2W
+                                                                         direction=TransformationDirection.W2C
+                                                                         # !!! W2C !!!
                                                                          )
         camera_intrinsics = get_intrinsics(cameras.get(im.image_information.camera_id))
         camera = Camera(camera_pose=camera_pose,
@@ -89,6 +88,65 @@ def load_colmap_dataset(path_to_sparse_folder, path_to_images):
                         width=width, height=height)
         datasetEntries.append(DatasetEntry(image_metadata, points2D, camera))
     return Dataset(points3D, datasetEntries)
+
+
+def export_in_colmap_format(ds: Dataset, output_path, binary=False):
+    from dataset.colmap_dataset_loader.read_write_model import Camera, CameraModel, BaseImage, Point3D, \
+        write_cameras_binary, write_points3D_binary, write_images_binary, write_cameras_text, write_points3D_text, \
+        write_images_text
+    cameras = []
+    base_images = []
+    points3D = []
+
+    for index, d in enumerate(ds.datasetEntries, start=1):
+        cameras.append(
+            Camera(index,
+                   model=CameraModelType.PINHOLE.name,  # TODO: maybe not always pinhole
+                   width=d.camera.width,
+                   height=d.camera.height,
+                   params=[d.camera.camera_intrinsics.focal_x, d.camera.camera_intrinsics.focal_y,
+                           d.camera.camera_intrinsics.center_x, d.camera.camera_intrinsics.center_y])
+        )
+        scipy_qvec = d.camera.camera_pose.in_direction(TransformationDirection.W2C).rotation.as_quat()
+        base_images.append(
+            BaseImage(index,
+                      qvec=[scipy_qvec[3], scipy_qvec[0], scipy_qvec[1], scipy_qvec[2]],
+                      tvec=d.camera.camera_pose.in_direction(TransformationDirection.W2C).translation,
+                      camera_id=index,
+                      name=d.image_metadata.identifier,
+                      xys=list(map(lambda p: list(p.xy), d.points2D)),
+                      point3D_ids=list(map(
+                          lambda p: p.point3D_identifier if p.point3D_identifier is not None else -1,
+                          d.points2D))
+                      )
+        )
+    img_id_point2d = [(i, p) for i, d in enumerate(ds.datasetEntries, start=1) for p in d.points_with_3d()]
+    auxiliary_mapping = {}
+    for img_id, point2 in img_id_point2d:
+        if auxiliary_mapping.get(point2.point3D_identifier) is None:
+            auxiliary_mapping[point2.point3D_identifier] = []
+        auxiliary_mapping[point2.point3D_identifier].append((img_id, point2.identifier))
+    for p in ds.points3D:
+        image_ids, point2d_idxs = list(zip(*auxiliary_mapping.get(p.identifier)))
+        points3D.append(
+            Point3D(id=p.identifier,
+                    xyz=p.xyz,
+                    rgb=p.metadata.get("rgb") if p.metadata.get("rgb") is not None else np.array([255, 255, 255]),
+                    error=p.metadata.get("error") if p.metadata.get("error") is not None else 999,
+                    image_ids=image_ids,
+                    point2D_idxs=point2d_idxs)
+        )
+    cameras = {c.id: c for c in cameras}
+    base_images = {b.id: b for b in base_images}
+    points3D = {p.id: p for p in points3D}
+    if binary:
+        write_cameras_binary(cameras, os.path.join(output_path, "cameras.bin"))
+        write_images_binary(base_images, os.path.join(output_path, "images.bin"))
+        write_points3D_binary(points3D, os.path.join(output_path, "points3D.bin"))
+    else:
+        write_cameras_text(cameras, os.path.join(output_path, "cameras.txt"))
+        write_images_text(base_images, os.path.join(output_path, "images.txt"))
+        write_points3D_text(points3D, os.path.join(output_path, "points3D.txt"))
 
 
 if __name__ == "__main__":
