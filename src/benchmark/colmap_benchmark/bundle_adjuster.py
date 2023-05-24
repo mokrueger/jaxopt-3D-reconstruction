@@ -5,9 +5,6 @@ import subprocess
 
 from dataclasses import dataclass
 
-from dataset import Dataset
-from dataset.colmap_dataset_loader import read_write_model
-
 COLMAP_PATH = "/usr/local/bin/colmap"
 
 BundleAdjustmentReport = collections.namedtuple(  # TODO: maybe just a dataclass

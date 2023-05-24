@@ -1,17 +1,21 @@
 import os
-from pathlib import Path
-
 import numpy as np
+from pathlib import Path
 
 from PIL import Image
 
-from dataset import DatasetEntry, ImageMetadata, Point2D, Point3D, Camera, Dataset
-from dataset.colmap_dataset_loader.cameras import read_cameras_bin, read_cameras_txt, CameraModelType
-from dataset.colmap_dataset_loader.images import read_images_bin, read_images_txt
-from dataset.colmap_dataset_loader.points import read_points3d_bin, read_points3d_txt
-from dataset.datacontainers import CameraIntrinsics
-from dataset.datacontainers.camera_pose import CoordinateSystem, TransformationDirection
-from dataset.datacontainers.camera_pose.camera_pose import CameraPose
+from src.dataset.camera import Camera, CameraIntrinsics
+from src.dataset.dataset import Dataset
+from src.dataset.datasetEntry import DatasetEntry
+from src.dataset.imageMetadata import ImageMetadata
+from src.dataset.point import Point2D, Point3D
+
+from src.dataset.loaders.colmap_dataset_loader.cameras import read_cameras_bin, read_cameras_txt, CameraModelType
+from src.dataset.loaders.colmap_dataset_loader.images import read_images_bin, read_images_txt
+from src.dataset.loaders.colmap_dataset_loader.points import read_points3d_bin, read_points3d_txt
+
+from src.dataset.camera_pose.camera_pose import CameraPose
+from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
 
 
 def params_to_intrinsics(fx, fy, cx, cy, s=None):
@@ -91,7 +95,7 @@ def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False):
 
 
 def export_in_colmap_format(ds: Dataset, output_path, binary=False):
-    from dataset.colmap_dataset_loader.read_write_model import Camera, CameraModel, BaseImage, Point3D, \
+    from src.dataset.loaders.colmap_dataset_loader.read_write_model import Camera, BaseImage, Point3D, \
         write_cameras_binary, write_points3D_binary, write_images_binary, write_cameras_text, write_points3D_text, \
         write_images_text
     cameras = []

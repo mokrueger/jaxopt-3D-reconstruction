@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
-from dataset.colmap_dataset_loader.read_write_model import read_cameras_text
+from src.dataset.loaders.colmap_dataset_loader.read_write_model import read_cameras_text
 
 
 @dataclass

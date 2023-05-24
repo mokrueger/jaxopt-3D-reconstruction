@@ -1,7 +1,9 @@
 import os
 from enum import Enum
 
-from dataset.datacontainers.camera_pose import TransformationDirection, InvalidInputFormatErr, PoseFormat, CoordinateSystem
+from src.dataset.camera_pose.enums_and_types import TransformationDirection, PoseFormat, \
+    CoordinateSystem
+from src.dataset.camera_pose.exceptions import InvalidInputFormatErr
 
 
 def _2d_map(func, iterable):

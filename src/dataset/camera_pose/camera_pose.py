@@ -8,10 +8,10 @@ import numpy as np
 from scipy import linalg
 from scipy.spatial.transform.rotation import Rotation
 
-from dataset.datacontainers.camera_pose.constants import CONVERSION_MATRIX
-from dataset.datacontainers.camera_pose.enums_and_types import TransformationDirection, CoordinateSystem, PoseFormat
-from dataset.datacontainers.camera_pose.exceptions import InvalidInputFormatErr
-from dataset.datacontainers.camera_pose.helpers import _print_2d_matrix_formatted, parse_metadata, _opposite, \
+from src.dataset.camera_pose.constants import CONVERSION_MATRIX
+from src.dataset.camera_pose.enums_and_types import TransformationDirection, CoordinateSystem, PoseFormat
+from src.dataset.camera_pose.exceptions import InvalidInputFormatErr
+from src.dataset.camera_pose.helpers import _print_2d_matrix_formatted, parse_metadata, _opposite, \
     create_metadata
 
 
@@ -119,6 +119,11 @@ class CameraPose:
     @property
     def transformation_translation_matrix(self) -> np.ndarray:
         return np.r_[self.rotation_translation_matrix, np.array([[0.0, 0.0, 0.0, 1.0]])]
+
+    @property
+    def wxyz_quaternion(self):
+        q = self.rotation.as_quat()
+        return np.array([q[3], *q[0:3]])
 
     def as_wxyz_quaternion_translation_str(self):
         quaternion = list(map(str, self.rotation.as_quat()))
