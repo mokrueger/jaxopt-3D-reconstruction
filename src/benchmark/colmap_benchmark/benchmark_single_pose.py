@@ -96,7 +96,7 @@ def benchmark_colmap_absolute_pose(dataset: Dataset, refine_focal_length=True,
     absolute_pose_refinement_options = AbsolutePoseRefinementOptions()
     absolute_pose_refinement_options.refine_extra_params = refine_focal_length
     absolute_pose_refinement_options.refine_focal_length = refine_focal_length
-    absolute_pose_refinement_options.print_summary = True
+    absolute_pose_refinement_options.print_summary = False  # Set to false for now
 
     tvecs, qvecs, p2d_list, p3d_list, inlier_mask_list, colmap_camera_list, camera_poses_list = [], [], [], [], [], [], []
     # Note: sorting just for peace of mind
