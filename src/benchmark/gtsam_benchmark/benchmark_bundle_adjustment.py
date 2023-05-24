@@ -5,14 +5,14 @@ from gtsam import (LevenbergMarquardtOptimizer, NonlinearFactorGraph, PriorFacto
 
 from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
 from src.dataset.dataset import Dataset
-from src.dataset.loaders.colmap_dataset_loader import load_colmap_dataset
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 
 L = symbol_shorthand.L
 X = symbol_shorthand.X
 
 
-def benchmark_gtsam_bundle_adjustment(dataset: Dataset, args=None):
-    noise_dataset = Dataset.with_noise(dataset)
+def benchmark_gtsam_bundle_adjustment(dataset: Dataset, add_noise=True, args=None):
+    noise_dataset = Dataset.with_noise(dataset) if add_noise else dataset
     graph = NonlinearFactorGraph()
 
     initial_estimate = Values()

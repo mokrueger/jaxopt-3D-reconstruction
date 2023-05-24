@@ -8,7 +8,7 @@ from gtsam import (symbol_shorthand, SmartProjectionPose3Factor, Cal3_S2, Levenb
 from gtsam.examples import SFMdata
 from gtsam.utils import plot
 
-from src.dataset.loaders.colmap_dataset_loader import load_colmap_dataset
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.dataset.dataset import Dataset
 
 L = symbol_shorthand.L

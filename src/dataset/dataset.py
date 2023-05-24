@@ -14,6 +14,7 @@ class Dataset:
     points3D: List[Point3D]
     points3D_mapped: Dict = field(init=False)
     datasetEntries: List[DatasetEntry]
+    name: Optional[str] = None
 
     def __post_init__(self):
         self.points3D_mapped = {p.identifier: p for p in self.points3D}
@@ -70,3 +71,14 @@ class Dataset:
     #  @property
     def avg_num_2d_points_per_image(self):
         return np.average([de.num_2d_points for de in self.datasetEntries])
+
+    def __deepcopy__(self, memodict):
+        return Dataset(
+            points3D=list(map(lambda p: Point3D(p.identifier, p.x, p.y, p.z, p.metadata), self.points3D)),
+            datasetEntries=list(map(lambda de: DatasetEntry(
+                image_metadata=de.image_metadata,
+                points2D=list(
+                    map(lambda p: Point2D(p.identifier, p.x, p.y, p.point3D_identifier, p.metadata), de.points2D)),
+                camera=copy.deepcopy(de.camera)
+            ), self.datasetEntries))
+        )

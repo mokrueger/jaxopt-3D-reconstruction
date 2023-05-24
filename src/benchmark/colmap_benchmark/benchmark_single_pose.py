@@ -7,7 +7,7 @@ from pycolmap import AbsolutePoseRefinementOptions, RANSACOptions
 
 from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
 from src.dataset.dataset import Dataset
-from src.dataset.loaders.colmap_dataset_loader import load_colmap_dataset
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.dataset.camera_pose.camera_pose import CameraPose
 
 
@@ -84,10 +84,10 @@ def validate_output(output, camera_poses_list, validation_error_position, valida
     #  assert np.max(rotation_errors) <= validation_error_rotation
 
 
-def benchmark_colmap_absolute_pose(dataset: Dataset, refine_focal_length=True,
+def benchmark_colmap_absolute_pose(dataset: Dataset, add_noise=True, refine_focal_length=True,
                                    validate_result=True, validation_error_position=5e-02,
                                    validation_error_rotation=1e-02):
-    noisy_dataset = Dataset.with_noise(dataset)
+    noisy_dataset = Dataset.with_noise(dataset) if add_noise else dataset
 
     mapping_2d_3d_by_id = _prepare_dataset(noisy_dataset)
     mapping_cameras_by_id = _prepare_cameras(noisy_dataset)
