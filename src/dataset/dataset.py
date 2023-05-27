@@ -1,12 +1,12 @@
 import copy
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from src.dataset import np  # For the seed and reproducibility
 from scipy.spatial.transform import Rotation
 
 from src.dataset.datasetEntry import DatasetEntry
-from src.dataset.point import Point3D
+from src.dataset.point import Point3D, Point2D
 
 
 @dataclass
