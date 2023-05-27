@@ -8,3 +8,7 @@ ipympl
 ipykernel
 blender-notebook
 opencv-python
+
+# To read image metadata
+pillow==9.5.0
+pycolmap
