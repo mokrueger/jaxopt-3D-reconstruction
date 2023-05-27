@@ -4,17 +4,9 @@ import numpy as np
 from jax import device_put, jit
 from jaxopt import LevenbergMarquardt
 
-# from triangulation_relaxations import Se3, so3
-
-
-# def pose_to_x(pose):
-#     return np.concatenate([so3.r_to_rotvec(pose.R), pose.t])
-
 
 def get_reprojection_residuals_cpu(pose, points, observations, intrinsics):
-    # _pose = Se3(so3.rotvec_to_r(pose[:3]), pose[3:])
-
-    KE = np.einsum("ij,jk->i k", intrinsics, pose)
+    KE = np.einsum("ij,jk->ik", intrinsics, pose)
     x = np.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
@@ -32,13 +24,22 @@ def rot_mat_from_vec(rodrigues_vec):
 
 
 @jit
-def get_reprojection_residuals(pose, points, observations, intrinsics):
-    _pose = jnp.block(
-        [[rot_mat_from_vec(pose[:3]), pose[3:, jnp.newaxis]], [jnp.zeros(3).T, 1]]
+def get_reprojection_residuals(opt_params, points, observations):
+    pose = opt_params[:6]
+    intrinsics = jnp.array(
+        [
+            [opt_params[6], opt_params[10], opt_params[8]],
+            [0, opt_params[7], opt_params[9]],
+            [0, 0, 1],
+        ]
+    )
+
+    _pose = jnp.concatenate(
+        [rot_mat_from_vec(pose[:3]), pose[3:, jnp.newaxis]], axis=1
     )  # build pose matrix (SE3) from pose vector
 
     # reproject
-    KE = jnp.einsum("ij,jk->i k", intrinsics, _pose)
+    KE = jnp.einsum("ij,jk->ik", intrinsics, _pose)
     x = jnp.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
@@ -63,28 +64,26 @@ class JaxPoseOptimizer:
 
         return lm, jit(lm.run)
 
-    def run_pose_opt(self, pose0, points_gpu, observations_gpu, intrinsics_gpu):
+    def run_pose_opt(self, pose0, intrinsics0, points_gpu, observations_gpu):
+        opt_params = jnp.concatenate(
+            [JaxPoseOptimizer.pose_mat_to_vec(pose0), jnp.array(intrinsics0)]
+        )
         params, state = self.optimizer_func(
-            JaxPoseOptimizer.pose_mat_to_vec(pose0),
+            opt_params,
             points=points_gpu,
             observations=observations_gpu,
-            intrinsics=intrinsics_gpu,
         )
 
         params = params.block_until_ready()
 
         return params, state
 
-    def compile_pose_opt(self, point_shape, observations_shape, intrinsics_shape):
-        _pose0 = jnp.zeros(6)
+    def compile_pose_opt(self, point_shape, observations_shape):
+        opt_params = jnp.zeros(11)  # 6 for pose, 5 for intrinsics
         _points_gpu = jnp.zeros(point_shape)
         _observations_gpu = jnp.zeros(observations_shape)
-        _intrinsics_gpu = jnp.zeros(intrinsics_shape)
         self.optimizer_func(
-            _pose0,
-            points=_points_gpu,
-            observations=_observations_gpu,
-            intrinsics=_intrinsics_gpu,
+            opt_params, points=_points_gpu, observations=_observations_gpu
         ).params.block_until_ready()
 
     @staticmethod
