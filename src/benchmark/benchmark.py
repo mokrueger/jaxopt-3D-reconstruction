@@ -1,9 +1,15 @@
 """
 This is where the code for the comparison between the three methods goes
 """
-from src.benchmark.colmap_benchmark.benchmark_single_pose import benchmark_colmap_absolute_pose
-from src.benchmark.colmap_benchmark.benchmark_bundle_adjustment import benchmark_colmap_bundle_adjustment
-from src.benchmark.gtsam_benchmark.benchmark_bundle_adjustment import benchmark_gtsam_bundle_adjustment
+from src.benchmark.colmap_benchmark.benchmark_single_pose import (
+    benchmark_colmap_absolute_pose,
+)
+from src.benchmark.colmap_benchmark.benchmark_bundle_adjustment import (
+    benchmark_colmap_bundle_adjustment,
+)
+from src.benchmark.gtsam_benchmark.benchmark_bundle_adjustment import (
+    benchmark_gtsam_bundle_adjustment,
+)
 from src.dataset.dataset import Dataset
 
 #  from src.benchmark.gtsam_benchmark.benchmark_single_pose import import benchmark_gtsam_single_pose
@@ -16,6 +22,15 @@ SACRE_COEUR_SPARSE = "/home/morkru/Downloads/sacre_coeur/dense/sparse/"
 SACRE_COEUR_IMAGES = "/home/morkru/Downloads/sacre_coeur/dense/images/"
 
 
+from abc import ABC, abstractmethod
+
+
+class Benchmark(ABC):
+    @abstractmethod
+    def _prepare_dataset(self):
+        pass
+
+
 def benchmark_single_pose(dataset):
     colmap_time = benchmark_colmap_absolute_pose(dataset, add_noise=False)
     #  gtsam_time = benchmark_gtsam_single_pose(dataset, add_noise=False)
@@ -26,7 +41,9 @@ def benchmark_single_pose(dataset):
 
 
 def benchmark_bundle_adjustment(dataset):
-    colmap_time = benchmark_colmap_bundle_adjustment(dataset, add_noise=False, validate_result=False)
+    colmap_time = benchmark_colmap_bundle_adjustment(
+        dataset, add_noise=False, validate_result=False
+    )
     #  gtsam_time = benchmark_gtsam_bundle_adjustment(dataset, add_noise=False)
     return {
         "colmap_time": colmap_time,
@@ -38,7 +55,9 @@ if __name__ == "__main__":
     print("Loading datasets")
     datasets = [
         #  load_colmap_dataset(REICHSTAG_SPARSE, REICHSTAG_IMAGES, binary=True, name="Reichstag"),
-        load_colmap_dataset(SACRE_COEUR_SPARSE, SACRE_COEUR_IMAGES, binary=True, name="Sacre Coeur")
+        load_colmap_dataset(
+            SACRE_COEUR_SPARSE, SACRE_COEUR_IMAGES, binary=True, name="Sacre Coeur"
+        )
     ]
 
     print("Adding noise")
@@ -51,12 +70,9 @@ if __name__ == "__main__":
             "points2D_per_image": nd.avg_num_2d_points_per_image(),
             "points3D_per_image": nd.avg_num_3d_points_per_image(),
             "num_images": nd.num_images(),
-            "num_points3D": nd.num_3d_points()
+            "num_points3D": nd.num_3d_points(),
         }
         statistics = benchmark_bundle_adjustment(nd)
-        evaluation.append({
-            **problem_metadata,
-            **statistics
-        })
+        evaluation.append({**problem_metadata, **statistics})
 
     print("finished")
