@@ -76,6 +76,50 @@ class JaxoptBenchmark(Benchmark):
 
 
 from scipy.spatial.transform import Rotation as R
+from triangulation_relaxations.se3 import Se3
+from triangulation_relaxations.so3 import rotvec_to_r
+from src.reconstruction.bundle_adjustment.pose_optimization import (
+    get_reprojection_residuals_cpu,
+)
+
+
+def plot_costs(
+    ax,
+    pose0,
+    pose1,
+    points,
+    observations,
+    intrinsics,
+    eps=0.1,
+    n=1000,
+    label0="",
+    label1="",
+):
+    """Plot cost function when interpolating between pose0 and pose1"""
+    taus = np.linspace(-eps, 1 + eps, n)
+    index_0, index_1 = np.searchsorted(taus, [0, 1])
+    taus = np.insert(taus, [index_0, index_1], [0, 1])
+    index_1 += 1  # compensate for the insertion of 0
+
+    p0 = Se3(pose0[:3, :3], pose0[:3, 3])
+    p1 = Se3(rotvec_to_r(pose1[:3]), pose1[3:])
+
+    objective_values = []
+    for tau in taus:
+        p_int = Se3(
+            (p0.q ** (1 - tau) * p1.q**tau).R,
+            p0.t * (1 - tau) + p1.t * tau,
+        )
+
+        objective_values.append(
+            get_reprojection_residuals_cpu(
+                p_int.T, points, observations, intrinsics
+            ).sum()
+        )
+
+    ax.plot(taus, objective_values)
+    ax.plot(0, objective_values[index_0], "o", color="red", label=label0)
+    ax.plot(1, objective_values[index_1], "o", color="blue", label=label1)
 
 
 if __name__ == "__main__":
@@ -107,7 +151,7 @@ if __name__ == "__main__":
     start = time.process_time()
     params, state = jaxopt_benchmark.optimize(
         camera_index,
-        jaxopt_benchmark.cam_poses_gpu[camera_index + 3],
+        jaxopt_benchmark.cam_poses_gpu[camera_index],
         initial_intrinsics,
     )
     print("optimization time:", time.process_time() - start, "s")
@@ -124,3 +168,25 @@ if __name__ == "__main__":
         "Intrinsics error:",
         np.array(initial_intrinsics) - np.array(params[6:]),
     )
+
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update({"font.size": 12})
+    fig, ax = plt.subplots(1, 1)
+    plot_costs(
+        ax,
+        jaxopt_benchmark.cam_poses[camera_index],
+        np.array(params[:6]),
+        jaxopt_benchmark.points[camera_index],
+        jaxopt_benchmark.observations[camera_index],
+        jaxopt_benchmark.intrinsics[camera_index],
+        label0="initial pose",
+        label1="optimized pose",
+        n=100,
+    )
+    # ax.axhline(results_gt.cost, color='k', linestyle='--')
+    ax.set_xlabel("distance (normalized)")
+    ax.set_ylabel("cost function")
+    ax.legend()
+    fig.savefig("test_jaxopt.png")
+    fig.show()
