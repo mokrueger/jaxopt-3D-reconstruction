@@ -6,7 +6,7 @@ from jaxopt import LevenbergMarquardt
 
 
 def get_reprojection_residuals_cpu(pose, points, observations, intrinsics):
-    KE = np.einsum("ij,jk->ik", intrinsics, pose)
+    KE = np.einsum("ij,jk->ik", intrinsics, pose[:3, :])
     x = np.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
