@@ -98,6 +98,28 @@ class JaxoptBenchmark(Benchmark):
             self.masks_gpu[index],
         )
 
+    def compile_batch(self, index: int, batch_size: int = 8) -> None:
+        self.optimizer.compile_pose_opt_batch(
+            self.points[index].shape,
+            self.observations[index].shape,
+            batch_size=batch_size,
+        )
+
+    def optimize_batch(
+        self,
+        index: int,
+        initial_poses: np.array,
+        initial_intrinsics: np.array,
+        batch_size: int = 8,
+    ):
+        return self.optimizer.run_pose_opt_batch(
+            initial_poses,
+            initial_intrinsics,
+            self.points_gpu[index : index + batch_size],
+            self.observations_gpu[index : index + batch_size],
+            self.masks_gpu[index : index + batch_size],
+        )
+
 
 from src.reconstruction.bundle_adjustment.pose_optimization import (
     get_reprojection_residuals_cpu,
@@ -128,6 +150,7 @@ if __name__ == "__main__":
         if config["add_noise"]
         else ds
     )
+    batch_size = 75
 
     jaxopt_benchmark = JaxoptBenchmark(ds)
 
@@ -137,7 +160,7 @@ if __name__ == "__main__":
 
     print("=== compilation ===")
     start = time.process_time()
-    jaxopt_benchmark.compile(0)
+    jaxopt_benchmark.compile_batch(0, batch_size=batch_size)
     print("compilation time: %.5fs" % (time.process_time() - start))
 
     #
@@ -149,24 +172,28 @@ if __name__ == "__main__":
 
     losses = []
     start = time.process_time()
-    for camera_index in range(cam_num):
+    for camera_index in range(0, cam_num, batch_size):
         # fx fy cx cy skew
-        intr = jaxopt_benchmark.intrinsics[camera_index]
-        initial_intrinsics = [
-            intr[0, 0],
-            intr[1, 1],
-            intr[0, 2],
-            intr[1, 2],
-            intr[0, 1],
-        ]
+        intr = jaxopt_benchmark.intrinsics[camera_index : camera_index + batch_size]
 
-        params, state = jaxopt_benchmark.optimize(
+        initial_intrinsics = np.array(
+            [
+                intr[:, 0, 0],
+                intr[:, 1, 1],
+                intr[:, 0, 2],
+                intr[:, 1, 2],
+                intr[:, 0, 1],
+            ]
+        ).T
+
+        params, state = jaxopt_benchmark.optimize_batch(
             camera_index,
-            jaxopt_benchmark.cam_poses_gpu[camera_index],
+            jaxopt_benchmark.cam_poses_gpu[camera_index : camera_index + batch_size],
             initial_intrinsics,
+            batch_size=batch_size,
         )
 
-        losses.append(state.loss)
+        losses.extend(state.loss)
 
     print("optimization time: %.5fs" % (time.process_time() - start))
 
@@ -201,5 +228,5 @@ if __name__ == "__main__":
     ax.set_xlabel("camera number")
     ax.set_ylabel("cost function")
     ax.legend()
-    fig.savefig("test_jaxopt.png")
+    fig.savefig("_test_jaxopt.png")
     fig.show()

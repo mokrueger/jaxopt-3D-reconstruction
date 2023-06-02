@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 import numpy as np
-from jax import device_put, jit
+from jax import device_put, jit, vmap
 from jaxopt import LevenbergMarquardt
 
 
@@ -53,6 +53,9 @@ class JaxPoseOptimizer:
 
         # create optimizer
         self.optimizer, self.optimizer_func = self.create_lm_optimizer()
+        self.optimizer_func_batch = jit(
+            vmap(self.optimizer_func, in_axes=((0, 0, 0, 0)))
+        )
 
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
@@ -80,16 +83,41 @@ class JaxPoseOptimizer:
 
         return params, state
 
+    def run_pose_opt_batch(
+        self, poses0, intrinsics0, points_gpu, observations_gpu, mask
+    ):
+        opt_params = jnp.array(
+            [
+                jnp.concatenate([JaxPoseOptimizer.pose_mat_to_vec(p0), jnp.array(i0)])
+                for p0, i0 in zip(poses0, intrinsics0)
+            ]
+        )
+
+        params, state = self.optimizer_func_batch(
+            opt_params, points_gpu, observations_gpu, mask
+        )
+
+        params = params.block_until_ready()
+
+        return params, state
+
+    def compile_pose_opt_batch(self, point_shape, observations_shape, batch_size=8):
+        opt_params = jnp.zeros((batch_size, 11))  # 6 for pose, 5 for intrinsics
+        _points_gpu = jnp.zeros((batch_size, *point_shape))
+        _observations_gpu = jnp.zeros((batch_size, *observations_shape))
+        _mask_gpu = jnp.zeros((batch_size, point_shape[0]), dtype=bool)
+
+        self.optimizer_func_batch(
+            opt_params, _points_gpu, _observations_gpu, _mask_gpu
+        ).params.block_until_ready()
+
     def compile_pose_opt(self, point_shape, observations_shape):
         opt_params = jnp.zeros(11)  # 6 for pose, 5 for intrinsics
         _points_gpu = jnp.zeros(point_shape)
         _observations_gpu = jnp.zeros(observations_shape)
         _mask_gpu = jnp.zeros(point_shape[0], dtype=bool)
         self.optimizer_func(
-            opt_params,
-            points=_points_gpu,
-            observations=_observations_gpu,
-            mask=_mask_gpu,
+            opt_params, _points_gpu, _observations_gpu, _mask_gpu
         ).params.block_until_ready()
 
     @staticmethod
@@ -113,5 +141,5 @@ class JaxPoseOptimizer:
     @staticmethod
     def to_gpu(data):
         if isinstance(data, (list, tuple)):
-            return [device_put(i) for i in data]
+            return np.array([device_put(i) for i in data])
         return device_put(data)
