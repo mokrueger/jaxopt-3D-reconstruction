@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import vmap, jit
+from jax import vmap, jit, device_put
 from jaxopt import LevenbergMarquardt, OptaxSolver
 
 from jax.experimental import sparse
@@ -149,3 +149,67 @@ def run_lm_gpu(_pose0, points_gpu, observations_gpu, intrinsics_gpu):
         observations=_observations_gpu,
         intrinsics=_intrinsics_gpu,
     ).params
+
+
+"""
+camera params -> (m - 1) * 6
+intrinsics -> (m - 1) * 5
+points -> n * 3
+"""
+
+
+@jit
+def get_reprojection_residuals(
+    opt_params, camera_param_num, intrinsics_param_num, points_param_num, observations
+):
+    camera_params = opt_params[0].reshape((-1, 6))
+    intrinsics_params = opt_params[1].reshape((-1, 5))
+    points_params = opt_params[2].reshape((-1, 3))
+    print(camera_params.shape, intrinsics_params.shape, points_params.shape)
+    return [camera_params * 0, intrinsics_params * 0, points_params * 0]
+
+
+class JaxBundleAdjustment:
+    def __init__(self):
+        # set params
+
+        # create optimizer
+        self.optimizer, self.optimizer_func = self.create_lm_optimizer()
+
+    def create_lm_optimizer(self):
+        lm = LevenbergMarquardt(
+            residual_fun=get_reprojection_residuals,
+            tol=1e-15,
+            gtol=1e-15,
+            jit=True,
+            solver="inv",
+        )
+
+        return lm, jit(lm.run)
+
+    def compile_pose_opt(self, camera_num, points_num, observations_shape):
+        camera_param_num = (camera_num - 1) * 6
+        intrinsics_param_num = (camera_num - 1) * 5
+        points_param_num = points_num * 3
+        param_num = camera_param_num + intrinsics_param_num + points_param_num
+
+        opt_params = [
+            jnp.zeros(nums)
+            for nums in [camera_param_num, intrinsics_param_num, points_param_num]
+        ]
+
+        _observations_gpu = jnp.zeros(observations_shape)
+
+        self.optimizer_func(
+            opt_params,
+            camera_param_num=camera_param_num,
+            intrinsics_param_num=intrinsics_param_num,
+            points_param_num=points_param_num,
+            observations=_observations_gpu,
+        ).params.block_until_ready()
+
+    @staticmethod
+    def to_gpu(data):
+        if isinstance(data, (list, tuple)):
+            return [device_put(i) for i in data]
+        return device_put(data)

@@ -1,16 +1,16 @@
 import jax.numpy as jnp
 import numpy as np
-
 from jax import device_put, jit
 from jaxopt import LevenbergMarquardt
 
 
-def get_reprojection_residuals_cpu(pose, points, observations, intrinsics):
+def get_reprojection_residuals_cpu(pose, points, observations, intrinsics, mask):
     KE = np.einsum("ij,jk->ik", intrinsics, pose[:3, :])
     x = np.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
-    return ((observations - x) ** 2).sum(axis=1)
+    res = ((observations - x) ** 2).sum(axis=1)
+    return np.where(mask, res, np.zeros_like(res))
 
 
 @jit
@@ -24,7 +24,7 @@ def rot_mat_from_vec(rodrigues_vec):
 
 
 @jit
-def get_reprojection_residuals(opt_params, points, observations):
+def get_reprojection_residuals(opt_params, points, observations, mask):
     pose = opt_params[:6]
     intrinsics = jnp.array(
         [
@@ -43,7 +43,8 @@ def get_reprojection_residuals(opt_params, points, observations):
     x = jnp.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
-    return ((observations - x) ** 2).sum(axis=1)
+    res = ((observations - x) ** 2).sum(axis=1)
+    return jnp.where(mask, res, jnp.zeros_like(res))
 
 
 class JaxPoseOptimizer:
@@ -64,7 +65,7 @@ class JaxPoseOptimizer:
 
         return lm, jit(lm.run)
 
-    def run_pose_opt(self, pose0, intrinsics0, points_gpu, observations_gpu):
+    def run_pose_opt(self, pose0, intrinsics0, points_gpu, observations_gpu, mask):
         opt_params = jnp.concatenate(
             [JaxPoseOptimizer.pose_mat_to_vec(pose0), jnp.array(intrinsics0)]
         )
@@ -72,6 +73,7 @@ class JaxPoseOptimizer:
             opt_params,
             points=points_gpu,
             observations=observations_gpu,
+            mask=mask,
         )
 
         params = params.block_until_ready()
@@ -82,8 +84,12 @@ class JaxPoseOptimizer:
         opt_params = jnp.zeros(11)  # 6 for pose, 5 for intrinsics
         _points_gpu = jnp.zeros(point_shape)
         _observations_gpu = jnp.zeros(observations_shape)
+        _mask_gpu = jnp.zeros(point_shape[0], dtype=bool)
         self.optimizer_func(
-            opt_params, points=_points_gpu, observations=_observations_gpu
+            opt_params,
+            points=_points_gpu,
+            observations=_observations_gpu,
+            mask=_mask_gpu,
         ).params.block_until_ready()
 
     @staticmethod
