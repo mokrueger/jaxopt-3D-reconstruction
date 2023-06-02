@@ -1,20 +1,17 @@
-import sys
 import os
+import sys
 import time
 
 src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction/"
 if src_path not in sys.path:
     sys.path.append(src_path)
 
-from src.benchmark.benchmark import Benchmark
-
-from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
-from src.dataset.dataset import Dataset
-
-from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
-
-
 import numpy as np
+
+from src.benchmark.benchmark import Benchmark
+from src.dataset.dataset import Dataset
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
+from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
 
 
 class JaxoptBenchmark(Benchmark):
@@ -102,13 +99,9 @@ class JaxoptBenchmark(Benchmark):
         )
 
 
-from scipy.spatial.transform import Rotation as R
-from triangulation_relaxations.se3 import Se3
-from triangulation_relaxations.so3 import rotvec_to_r
 from src.reconstruction.bundle_adjustment.pose_optimization import (
     get_reprojection_residuals_cpu,
 )
-
 
 if __name__ == "__main__":
     #
