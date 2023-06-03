@@ -82,37 +82,17 @@ class JaxoptBenchmark(Benchmark):
 
         return np.array(masks)
 
-    def compile(self, index: int) -> None:
-        self.optimizer.compile_pose_opt(
-            self.points[index].shape, self.observations[index].shape
-        )
+    def compile(self, batch_size=8):
+        self.optimizer.compile(self.points_num, batch_size=batch_size)
 
     def optimize(
-        self, index: int, initial_pose: np.array, initial_intrinsics: np.array
-    ):
-        return self.optimizer.run_pose_opt(
-            initial_pose,
-            initial_intrinsics,
-            self.points_gpu[index],
-            self.observations_gpu[index],
-            self.masks_gpu[index],
-        )
-
-    def compile_batch(self, index: int, batch_size: int = 8) -> None:
-        self.optimizer.compile_pose_opt_batch(
-            self.points[index].shape,
-            self.observations[index].shape,
-            batch_size=batch_size,
-        )
-
-    def optimize_batch(
         self,
         index: int,
         initial_poses: np.array,
         initial_intrinsics: np.array,
-        batch_size: int = 8,
+        batch_size=8,
     ):
-        return self.optimizer.run_pose_opt_batch(
+        return self.optimizer.optimize(
             initial_poses,
             initial_intrinsics,
             self.points_gpu[index : index + batch_size],
@@ -160,7 +140,7 @@ if __name__ == "__main__":
 
     print("=== compilation ===")
     start = time.process_time()
-    jaxopt_benchmark.compile_batch(0, batch_size=batch_size)
+    jaxopt_benchmark.compile(batch_size=batch_size)
     print("compilation time: %.5fs" % (time.process_time() - start))
 
     #
@@ -186,7 +166,7 @@ if __name__ == "__main__":
             ]
         ).T
 
-        params, state = jaxopt_benchmark.optimize_batch(
+        params, state = jaxopt_benchmark.optimize(
             camera_index,
             jaxopt_benchmark.cam_poses_gpu[camera_index : camera_index + batch_size],
             initial_intrinsics,
