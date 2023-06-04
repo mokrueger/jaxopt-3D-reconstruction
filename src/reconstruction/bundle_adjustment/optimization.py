@@ -7,6 +7,82 @@ from jax.experimental import sparse
 from triangulation_relaxations import so3
 
 
+@jit
+@vmap
+def vec_to_transform(pose_vector):
+    return jnp.concatenate(
+        [rot_mat_from_vec(pose_vector[:3]), pose_vector[3:, jnp.newaxis]], axis=1
+    )  # build pose matrix (SE3) from pose vector
+
+
+@jit
+@vmap
+def vec_to_intrinsics(int_vector):
+    return jnp.array(
+        [
+            [int_vector[0], int_vector[4], int_vector[2]],
+            [0, int_vector[1], int_vector[3]],
+            [0, 0, 1],
+        ]
+    )
+
+
+@jit
+def get_residuals_batched(opt_params, points, observations, mask):
+    print("compile")
+    batch_params = opt_params.reshape((-1, 11))
+    batch_pose = vec_to_transform(batch_params[:, :6])
+    batch_intrinsics = vec_to_intrinsics(batch_params[:, 6:])
+
+    # reproject
+    KE = jnp.einsum("bij,bjk->bik", batch_intrinsics, batch_pose)
+    x = jnp.einsum("bij,bhj->bhi", KE, points)  # reprojected_points
+    x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
+
+    res = ((observations - x) ** 2).sum(axis=2)
+    res = jnp.where(mask, res, jnp.zeros_like(res))
+
+    return res.sum(axis=1)
+
+
+class PoseReprojection:
+    def __init__(self, batch_size: int = 8):
+        self.batch_size = batch_size
+
+    def _tree_flatten(self):
+        children = ()  # arrays / dynamic values
+        aux_data = {"batch_size": self.batch_size}  # static values
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(*children, **aux_data)
+
+    @jit
+    def get_residuals(self, opt_params, points, observations, mask):
+        print("compile")
+        batch_params = opt_params.reshape((-1, 11))
+        batch_pose = vec_to_transform(batch_params[:, :6])
+        batch_intrinsics = vec_to_intrinsics(batch_params[:, 6:])
+
+        # reproject
+        KE = jnp.einsum("bij,bjk->bik", batch_intrinsics, batch_pose)
+        x = jnp.einsum("bij,bhj->bhi", KE, points)  # reprojected_points
+        x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
+
+        res = ((observations - x) ** 2).sum(axis=2)
+        res = jnp.where(mask, res, jnp.zeros_like(res))
+
+        return res.sum(axis=1)
+
+
+tree_util.register_pytree_node(
+    PoseReprojection,
+    PoseReprojection._tree_flatten,
+    PoseReprojection._tree_unflatten,
+)
+
+
 # @jit
 def project_single_point_gpu(tree_arg):
     E, x, K = tree_arg

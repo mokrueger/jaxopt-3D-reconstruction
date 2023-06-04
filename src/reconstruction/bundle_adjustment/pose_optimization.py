@@ -1,6 +1,8 @@
+from functools import partial
+
 import jax.numpy as jnp
 import numpy as np
-from jax import device_put, jit
+from jax import device_put, jit, tree_util, vmap
 from jaxopt import LevenbergMarquardt
 
 
@@ -24,8 +26,11 @@ def rot_mat_from_vec(rodrigues_vec):
 
 
 @jit
-def get_reprojection_residuals(opt_params, points, observations, mask):
-    pose = opt_params[:6]
+def get_residuals(opt_params, points, observations, mask):
+    pose = jnp.concatenate(
+        [rot_mat_from_vec(opt_params[:3]), opt_params[3:6, jnp.newaxis]], axis=1
+    )
+
     intrinsics = jnp.array(
         [
             [opt_params[6], opt_params[10], opt_params[8]],
@@ -34,12 +39,8 @@ def get_reprojection_residuals(opt_params, points, observations, mask):
         ]
     )
 
-    _pose = jnp.concatenate(
-        [rot_mat_from_vec(pose[:3]), pose[3:, jnp.newaxis]], axis=1
-    )  # build pose matrix (SE3) from pose vector
-
     # reproject
-    KE = jnp.einsum("ij,jk->ik", intrinsics, _pose)
+    KE = jnp.einsum("ij,jk->ik", intrinsics, pose)
     x = jnp.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
@@ -49,47 +50,38 @@ def get_reprojection_residuals(opt_params, points, observations, mask):
 
 class JaxPoseOptimizer:
     def __init__(self):
-        # set params
-
         # create optimizer
-        self.optimizer, self.optimizer_func = self.create_lm_optimizer()
+        self.optimizer, self.solver = self.create_lm_optimizer()
 
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
-            residual_fun=get_reprojection_residuals,
-            tol=1e-15,
-            gtol=1e-15,
-            jit=True,
-            solver="inv",
+            residual_fun=get_residuals, tol=1e-15, gtol=1e-15, jit=True, solver="inv"
         )
 
-        return lm, jit(lm.run)
+        return lm, jit(vmap(lm.run, in_axes=(0, 0, 0, 0)))
 
-    def run_pose_opt(self, pose0, intrinsics0, points_gpu, observations_gpu, mask):
-        opt_params = jnp.concatenate(
-            [JaxPoseOptimizer.pose_mat_to_vec(pose0), jnp.array(intrinsics0)]
-        )
-        params, state = self.optimizer_func(
-            opt_params,
-            points=points_gpu,
-            observations=observations_gpu,
-            mask=mask,
+    def optimize(self, poses0, intrinsics0, points_gpu, observations_gpu, mask):
+        opt_params = jnp.array(
+            [
+                jnp.concatenate([JaxPoseOptimizer.pose_mat_to_vec(p0), jnp.array(i0)])
+                for p0, i0 in zip(poses0, intrinsics0)
+            ]
         )
 
+        params, state = self.solver(opt_params, points_gpu, observations_gpu, mask)
         params = params.block_until_ready()
 
         return params, state
 
-    def compile_pose_opt(self, point_shape, observations_shape):
-        opt_params = jnp.zeros(11)  # 6 for pose, 5 for intrinsics
-        _points_gpu = jnp.zeros(point_shape)
-        _observations_gpu = jnp.zeros(observations_shape)
-        _mask_gpu = jnp.zeros(point_shape[0], dtype=bool)
-        self.optimizer_func(
-            opt_params,
-            points=_points_gpu,
-            observations=_observations_gpu,
-            mask=_mask_gpu,
+    def compile(self, points_num, batch_size=8):
+        # 6 for pose, 5 for intrinsics
+        opt_params = jnp.zeros((batch_size, 11))
+        _points_gpu = jnp.zeros((batch_size, points_num, 4))
+        _observations_gpu = jnp.zeros((batch_size, points_num, 2))
+        _mask_gpu = jnp.zeros((batch_size, points_num), dtype=bool)
+
+        self.solver(
+            opt_params, _points_gpu, _observations_gpu, _mask_gpu
         ).params.block_until_ready()
 
     @staticmethod
@@ -113,5 +105,5 @@ class JaxPoseOptimizer:
     @staticmethod
     def to_gpu(data):
         if isinstance(data, (list, tuple)):
-            return [device_put(i) for i in data]
+            return np.array([device_put(i) for i in data])
         return device_put(data)
