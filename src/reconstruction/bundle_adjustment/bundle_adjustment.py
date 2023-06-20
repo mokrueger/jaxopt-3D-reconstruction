@@ -56,11 +56,10 @@ class BundleAdjustment:
 
     @jit
     def get_residuals(self, opt_params, p3d_ind, p2d_list, cam_ind):
-        # (n, 3, 4), (n, 3, 3), (n, m, 4), (n, m, 2)
-        # poses, intrinsics, points, observations = opt_params
         cam_end_index = self.cam_num * 6
         intr_end_index = cam_end_index + self.cam_num * 5
 
+        # parse opt params
         cam_params = opt_params[:cam_end_index].reshape((-1, 6))
         intr_params = opt_params[cam_end_index:intr_end_index].reshape((-1, 5))
         points = opt_params[intr_end_index:].reshape((-1, 4))
@@ -68,14 +67,17 @@ class BundleAdjustment:
         poses = parse_cam_poses(cam_params)
         intrinsics = parse_intrinsics(intr_params)
 
+        # select corresponding poses and points
         p3d_selected = points.take(p3d_ind, axis=0)
         intr_selected = intrinsics.take(cam_ind, axis=0)
         poses_selected = poses.take(cam_ind, axis=0)
 
+        # reproject
         KE = jnp.einsum("bij,bjk->bik", intr_selected, poses_selected)
         x = jnp.einsum("bij,bj->bi", KE, p3d_selected)  # reprojected_points
         x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
+        # error
         return ((p2d_list - x) ** 2).sum(axis=1)
 
 

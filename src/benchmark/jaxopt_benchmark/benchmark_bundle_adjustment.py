@@ -28,11 +28,17 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         ) = self._prepare_dataset()
 
         print(
+            "points: ",
             self.p3d_list.shape,
+            "\npoint indices: ",
             self.p3d_ind.shape,
+            "\nobservations: ",
             self.p2d_list.shape,
+            "\ncamera indices: ",
             self.cam_ind.shape,
+            "\nposes: ",
             self.cam_poses.shape,
+            "\nintrinsics: ",
             self.intrinsics.shape,
         )
 
