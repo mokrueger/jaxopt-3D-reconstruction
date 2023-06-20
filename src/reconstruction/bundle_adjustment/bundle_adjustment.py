@@ -4,9 +4,8 @@ import optax
 from jax import device_put, jit, vmap
 from jax.experimental import sparse
 from jax.tree_util import register_pytree_node_class
-from jaxopt import OptaxSolver
+from jaxopt import LevenbergMarquardt, OptaxSolver
 from triangulation_relaxations import so3
-from jaxopt import LevenbergMarquardt
 
 
 @jit
@@ -39,6 +38,12 @@ def parse_cam_poses(cam_vec):
     )
 
 
+@jit
+@vmap
+def reproject_point(KE, point):
+    return KE @ point
+
+
 @register_pytree_node_class
 class BundleAdjustment:
     def __init__(self, cam_num, batch_size: int = 8):
@@ -68,13 +73,14 @@ class BundleAdjustment:
         intrinsics = parse_intrinsics(intr_params)
 
         # select corresponding poses and points
+        KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
+
         p3d_selected = points.take(p3d_ind, axis=0)
-        intr_selected = intrinsics.take(cam_ind, axis=0)
-        poses_selected = poses.take(cam_ind, axis=0)
+        KE_selected = KE.take(cam_ind, axis=0)
 
         # reproject
-        KE = jnp.einsum("bij,bjk->bik", intr_selected, poses_selected)
-        x = jnp.einsum("bij,bj->bi", KE, p3d_selected)  # reprojected_points
+        x = jnp.einsum("bij,bj->bi", KE_selected, p3d_selected)  # reprojected_points
+        # x = reproject_point(KE_selected, p3d_selected)
         x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
         # error
