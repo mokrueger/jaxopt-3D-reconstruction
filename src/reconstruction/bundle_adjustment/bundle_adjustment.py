@@ -1,9 +1,10 @@
 import jax.numpy as jnp
 import numpy as np
 import optax
-from jax import device_put, jit, vmap
+from jax import device_put, jit, make_jaxpr, vmap
 from jax.experimental import sparse
-from jax.tree_util import register_pytree_node_class
+from jax.lax import associative_scan, fori_loop, scan
+from jax.tree_util import Partial, register_pytree_node_class
 from jaxopt import LevenbergMarquardt, OptaxSolver
 from triangulation_relaxations import so3
 
@@ -60,7 +61,7 @@ class BundleAdjustment:
         return cls(*children, **aux_data)
 
     @jit
-    def get_residuals(self, opt_params, p3d_ind, p2d_list, cam_ind):
+    def get_residuals(self, opt_params, p3d_cam_indices_and_p2d, p2d_list):
         cam_end_index = self.cam_num * 6
         intr_end_index = cam_end_index + self.cam_num * 5
 
@@ -75,16 +76,58 @@ class BundleAdjustment:
         # select corresponding poses and points
         KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
 
-        p3d_selected = points.take(p3d_ind, axis=0)
-        KE_selected = KE.take(cam_ind, axis=0)
+        # def f_error(_KE, _points, _p3d_cam_indices_and_p2d, i, val):
+        #     indices = _p3d_cam_indices_and_p2d[i]
+        #     p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
+
+        #     point = _points[p3d_i]  # points.take(p3d_i, axis=0)
+        #     KE_selected = _KE[cam_i]  # KE.take(cam_i, axis=0)
+        #     y = KE_selected @ point
+        #     y = y[:2] / y[3]
+        #     y = ((p2d - y) ** 2).sum()
+        #     # return ((p2d - p2d) ** 2).sum()
+
+        #     return val + y
+
+        val = 0
+        for i in range(0, len(p3d_cam_indices_and_p2d)):
+            indices = p3d_cam_indices_and_p2d[i]
+            p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
+
+            point = points[p3d_i]  # points.take(p3d_i, axis=0)
+            KE_selected = KE[cam_i]  # KE.take(cam_i, axis=0)
+            y = KE_selected @ point
+            y = y[:2] / y[3]
+            y = ((p2d - y) ** 2).sum()
+            val += y
+
+        y = val
+        # return ((p2d - p2d) ** 2).sum()
+
+        # _f_error = Partial(
+        #     jit(f_error, static_argnums=[0, 1, 2]),
+        #     KE,
+        #     points,
+        #     p3d_cam_indices_and_p2d,
+        # )
+
+        # print(make_jaxpr(_f_error)(0, 0))
+
+        # y = fori_loop(
+        #     0,
+        #     len(p3d_cam_indices_and_p2d),
+        #     _f_error,
+        #     0,
+        # )
 
         # reproject
-        x = jnp.einsum("bij,bj->bi", KE_selected, p3d_selected)  # reprojected_points
+        # x = jnp.einsum("bij,bj->bi", KE_selected, p3d_selected)  # reprojected_points
         # x = reproject_point(KE_selected, p3d_selected)
-        x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
+        # y = y[..., :2] / y[..., 2:3]  # 2:3 to prevent axis from being removed
 
         # error
-        return ((p2d_list - x) ** 2).sum(axis=1)
+        y = jnp.array([y])
+        return y  # ((p2d_list - y) ** 2).sum(axis=1)
 
 
 class JaxBundleAdjustment:
@@ -125,7 +168,11 @@ class JaxBundleAdjustment:
 
         opt_params = jnp.concatenate([cam_params, intr_params, point_params])
 
-        params, state = self.solver(opt_params, p3d_ind, p2d_list, cam_ind)
+        p3d_cam_indices_and_p2d = jnp.column_stack([p3d_ind, cam_ind, p2d_list]).astype(
+            int
+        )
+
+        params, state = self.solver(opt_params, p3d_cam_indices_and_p2d, p2d_list)
         params = params.block_until_ready()
 
         return params, state

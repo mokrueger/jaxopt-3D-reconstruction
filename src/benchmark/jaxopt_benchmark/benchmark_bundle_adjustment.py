@@ -80,6 +80,7 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
             intrinsics.append(cam.camera_intrinsics.camera_intrinsics_matrix)
 
             map2d_3d = d_entry.map2d_3d(self.dataset.points3D_mapped)
+            # print(len(map2d_3d))
             for p2, p3 in map2d_3d:
                 p2d_list.append(p2.xy)
                 p3d_ind.append(p3d_ids[p3.identifier])
