@@ -19,43 +19,20 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         self.dataset = dataset
 
         (
-            self.p3d_list,
-            self.p3d_ind,
-            self.p2d_list,
-            self.cam_ind,
+            self.points_2d_all,
+            self.points_3d_all,
+            self.p3d_indices_all,
             self.cam_poses,
             self.intrinsics,
         ) = self._prepare_dataset()
 
-        print(
-            "points: ",
-            self.p3d_list.shape,
-            "\npoint indices: ",
-            self.p3d_ind.shape,
-            "\nobservations: ",
-            self.p2d_list.shape,
-            "\ncamera indices: ",
-            self.cam_ind.shape,
-            "\nposes: ",
-            self.cam_poses.shape,
-            "\nintrinsics: ",
-            self.intrinsics.shape,
-        )
-
-        self.p3d_list_gpu = JaxBundleAdjustment.to_gpu(self.p3d_list)
-        self.p3d_ind_gpu = JaxBundleAdjustment.to_gpu(self.p3d_ind)
-        self.p2d_list_gpu = JaxBundleAdjustment.to_gpu(self.p2d_list)
-        self.cam_ind_gpu = JaxBundleAdjustment.to_gpu(self.cam_ind)
+        self.points_2d_all_gpu = JaxBundleAdjustment.to_gpu(self.points_2d_all)
+        self.points_3d_all_gpu = JaxBundleAdjustment.to_gpu(self.points_3d_all)
+        self.p3d_indices_all_gpu = JaxBundleAdjustment.to_gpu(self.p3d_indices_all)
         self.cam_poses_gpu = JaxBundleAdjustment.to_gpu(self.cam_poses)
         self.intrinsics_gpu = JaxBundleAdjustment.to_gpu(self.intrinsics)
 
         self.optimizer = JaxBundleAdjustment(len(self.cam_poses))
-
-    # self.cam_poses_gpu = JaxBundleAdjustment.to_gpu(self.cam_poses)
-    # self.intrinsics_gpu = JaxBundleAdjustment.to_gpu(self.intrinsics)
-    # self.points_gpu = JaxBundleAdjustment.to_gpu(self.points)
-    # self.observations_gpu = JaxBundleAdjustment.to_gpu(self.observations)
-    # self.masks_gpu = JaxBundleAdjustment.to_gpu(self.masks)
 
     def __len__(self):
         return len(self.cam_poses)
@@ -64,37 +41,67 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         cam_poses = []
         intrinsics = []
 
-        cam_ind = []
-        p2d_list = []
+        points_2d_all = []
+        p3d_indices_all = []
+
         p3d = sorted(
             [(p.identifier, p.xyz) for p in self.dataset.points3D], key=lambda x: x[0]
         )
         p3d_ids = {j[0]: i for i, j in enumerate(p3d)}
-        p3d_list = [(*p[1], 1) for p in p3d]
-        p3d_ind = []
+        points_3d_all = [(*p[1], 1) for p in p3d]
 
-        for cam_index, d_entry in enumerate(self.dataset.datasetEntries):
-            cam = d_entry.camera
+        map_2d_3d_list = []
 
-            cam_poses.append(cam.camera_pose.rotation_translation_matrix)
-            intrinsics.append(cam.camera_intrinsics.camera_intrinsics_matrix)
+        for d_entry in self.dataset.datasetEntries:
+            cam_poses.append(d_entry.camera.camera_pose.rotation_translation_matrix)
+            intrinsics.append(d_entry.camera.camera_intrinsics.camera_intrinsics_matrix)
+            map_2d_3d_list.append(d_entry.map2d_3d(self.dataset.points3D_mapped))
 
-            map2d_3d = d_entry.map2d_3d(self.dataset.points3D_mapped)
-            # print(len(map2d_3d))
-            for p2, p3 in map2d_3d:
-                p2d_list.append(p2.xy)
-                p3d_ind.append(p3d_ids[p3.identifier])
-                cam_ind.append(cam_index)
+        max_2d_indices = max(len(i) for i in map_2d_3d_list)
+
+        for map2d_3d in map_2d_3d_list:
+            points_2d = []
+            p3d_indices = []
+
+            points_2d, p3d_indices = zip(
+                *[(p2.xy, p3d_ids[p3.identifier]) for p2, p3 in map2d_3d]
+            )
+
+            points_2d_all.append(
+                points_2d + (np.zeros(2),) * (max_2d_indices - len(points_2d))
+            )  # pad with out_of_bound_indices
+
+            p3d_indices_all.append(
+                p3d_indices
+                + (len(points_3d_all),) * (max_2d_indices - len(p3d_indices))
+            )  # pad with out_of_bound_indices
 
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
+        p3d_indices_all = np.array(p3d_indices_all)
+        points_3d_all = np.array(points_3d_all)
+        points_2d_all = np.array(points_2d_all)
 
-        p3d_ind = np.array(p3d_ind)
-        p3d_list = np.array(p3d_list)
-        p2d_list = np.array(p2d_list)
-        cam_ind = np.array(cam_ind)
+        print(
+            "points_2d_all: ",
+            points_2d_all.shape,
+            "\npoints_3d_all: ",
+            points_3d_all.shape,
+            "\np3d_indices_all: ",
+            p3d_indices_all.shape,
+            "\nposes: ",
+            cam_poses.shape,
+            "\nintrinsics: ",
+            intrinsics.shape,
+        )
 
-        return p3d_list, p3d_ind, p2d_list, cam_ind, cam_poses, intrinsics
+        return (
+            points_2d_all,
+            points_3d_all,
+            p3d_indices_all,
+            cam_poses,
+            intrinsics,
+        )
 
     def compile(self, index: int) -> None:
         self.optimizer.compile(self.points_num)
@@ -103,10 +110,9 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         return self.optimizer.optimize(
             initial_pose,
             initial_intrinsics,
-            self.p3d_list,
-            self.p3d_ind,
-            self.p2d_list,
-            self.cam_ind,
+            self.points_2d_all_gpu,
+            self.points_3d_all_gpu,
+            self.p3d_indices_all_gpu,
         )
 
 

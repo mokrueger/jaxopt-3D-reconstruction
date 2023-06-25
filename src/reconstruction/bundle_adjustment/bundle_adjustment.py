@@ -61,21 +61,21 @@ class BundleAdjustment:
         return cls(*children, **aux_data)
 
     @jit
-    def get_residuals(self, opt_params, p3d_cam_indices_and_p2d, p2d_list):
+    def get_residuals(self, opt_params, points_2d_all, p3d_indices_all):
         cam_end_index = self.cam_num * 6
         intr_end_index = cam_end_index + self.cam_num * 5
 
         # parse opt params
-        cam_params = opt_params[:cam_end_index].reshape((-1, 6))
-        intr_params = opt_params[cam_end_index:intr_end_index].reshape((-1, 5))
+        poses = parse_cam_poses(opt_params[:cam_end_index].reshape((-1, 6)))
+        intrinsics = parse_intrinsics(
+            opt_params[cam_end_index:intr_end_index].reshape((-1, 5))
+        )
         points = opt_params[intr_end_index:].reshape((-1, 4))
-
-        poses = parse_cam_poses(cam_params)
-        intrinsics = parse_intrinsics(intr_params)
 
         # select corresponding poses and points
         KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
-
+        print(points.shape, points_2d_all.shape, p3d_indices_all.shape)
+        return points[:200, :2].sum(axis=1)
         # def f_error(_KE, _points, _p3d_cam_indices_and_p2d, i, val):
         #     indices = _p3d_cam_indices_and_p2d[i]
         #     p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
@@ -89,19 +89,19 @@ class BundleAdjustment:
 
         #     return val + y
 
-        val = 0
-        for i in range(0, len(p3d_cam_indices_and_p2d)):
-            indices = p3d_cam_indices_and_p2d[i]
-            p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
+        # val = 0
+        # for i in range(0, len(p3d_cam_indices_and_p2d)):
+        #     indices = p3d_cam_indices_and_p2d[i]
+        #     p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
 
-            point = points[p3d_i]  # points.take(p3d_i, axis=0)
-            KE_selected = KE[cam_i]  # KE.take(cam_i, axis=0)
-            y = KE_selected @ point
-            y = y[:2] / y[3]
-            y = ((p2d - y) ** 2).sum()
-            val += y
+        #     point = points[p3d_i]  # points.take(p3d_i, axis=0)
+        #     KE_selected = KE[cam_i]  # KE.take(cam_i, axis=0)
+        #     y = KE_selected @ point
+        #     y = y[:2] / y[3]
+        #     y = ((p2d - y) ** 2).sum()
+        #     val += y
 
-        y = val
+        # y = val
         # return ((p2d - p2d) ** 2).sum()
 
         # _f_error = Partial(
@@ -126,8 +126,8 @@ class BundleAdjustment:
         # y = y[..., :2] / y[..., 2:3]  # 2:3 to prevent axis from being removed
 
         # error
-        y = jnp.array([y])
-        return y  # ((p2d_list - y) ** 2).sum(axis=1)
+        # y = jnp.array([y])
+        # return y  # ((p2d_list - y) ** 2).sum(axis=1)
 
 
 class JaxBundleAdjustment:
@@ -154,25 +154,31 @@ class JaxBundleAdjustment:
             tol=1e-15,
             gtol=1e-15,
             jit=True,
-            solver="inv",
+            # solver="inv",
+            # implicit_diff=False,
         )
 
         return opt, jit(opt.run)
 
-    def optimize(self, poses0, intrinsics0, p3d_list, p3d_ind, p2d_list, cam_ind):
+    def optimize(
+        self,
+        poses0,
+        intrinsics0,
+        points_2d_all,
+        points_3d_all,
+        p3d_indices_all,
+    ):
         cam_params = jnp.array(
             [JaxBundleAdjustment.pose_mat_to_vec(p0) for p0 in poses0]
         ).flatten()
         intr_params = jnp.array(intrinsics0).flatten()
-        point_params = jnp.array(p3d_list).flatten()
+        point_params = jnp.array(points_3d_all).flatten()
 
         opt_params = jnp.concatenate([cam_params, intr_params, point_params])
 
-        p3d_cam_indices_and_p2d = jnp.column_stack([p3d_ind, cam_ind, p2d_list]).astype(
-            int
-        )
+        # print(make_jaxpr(self.solver)(opt_params, points_2d_all, p3d_indices_all))
 
-        params, state = self.solver(opt_params, p3d_cam_indices_and_p2d, p2d_list)
+        params, state = self.solver(opt_params, points_2d_all, p3d_indices_all)
         params = params.block_until_ready()
 
         return params, state
