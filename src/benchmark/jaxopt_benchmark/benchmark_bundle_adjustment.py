@@ -68,13 +68,12 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
             )
 
             points_2d_all.append(
-                points_2d + (np.zeros(2),) * (max_2d_indices - len(points_2d))
-            )  # pad with out_of_bound_indices
+                points_2d + (points_2d[0],) * (max_2d_indices - len(points_2d))
+            )  # pad with recurring data
 
             p3d_indices_all.append(
-                p3d_indices
-                + (len(points_3d_all),) * (max_2d_indices - len(p3d_indices))
-            )  # pad with out_of_bound_indices
+                p3d_indices + (p3d_indices[0],) * (max_2d_indices - len(p3d_indices))
+            )  # pad with recurring data
 
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)

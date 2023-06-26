@@ -4,6 +4,7 @@ import optax
 from jax import device_put, jit, make_jaxpr, vmap
 from jax.experimental import sparse
 from jax.lax import associative_scan, fori_loop, scan
+from jax.profiler import save_device_memory_profile
 from jax.tree_util import Partial, register_pytree_node_class
 from jaxopt import LevenbergMarquardt, OptaxSolver
 from triangulation_relaxations import so3
@@ -45,6 +46,33 @@ def reproject_point(KE, point):
     return KE @ point
 
 
+def reproject_points_scan(KE, points_2d, p3d_indices, points_3d):
+    points_3d_selected = points_3d.take(p3d_indices, axis=0)
+    point_2d_projected = jnp.einsum("ij,bj->bi", KE, points_3d_selected)
+    point_2d_projected = point_2d_projected[..., :2] / point_2d_projected[..., 2:3]
+
+    return ((point_2d_projected - points_2d) ** 2).sum(axis=1)
+
+
+def reproject_points(KE, points_2d, p3d_indices, points_3d):
+    points_3d_selected = points_3d.take(p3d_indices, axis=0)
+    point_2d_projected = jnp.einsum("ij,bj->bi", KE, points_3d_selected)
+    point_2d_projected = point_2d_projected[..., :2] / point_2d_projected[..., 2:3]
+
+    return ((point_2d_projected - points_2d) ** 2).sum(axis=1)
+    # print(
+    #     KE.shape,
+    #     points_2d.shape,
+    #     p3d_indices.shape,
+    #     points_3d_selected.shape,
+    #     point_2d_projected.shape,
+    #     error.shape,
+    # )
+
+
+reproject_points_vmap = jit(vmap(reproject_points, in_axes=[0, 0, 0, None]))
+
+
 @register_pytree_node_class
 class BundleAdjustment:
     def __init__(self, cam_num, batch_size: int = 8):
@@ -70,64 +98,27 @@ class BundleAdjustment:
         intrinsics = parse_intrinsics(
             opt_params[cam_end_index:intr_end_index].reshape((-1, 5))
         )
-        points = opt_params[intr_end_index:].reshape((-1, 4))
+        points_3d = opt_params[intr_end_index:].reshape((-1, 4))
 
         # select corresponding poses and points
         KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
-        print(points.shape, points_2d_all.shape, p3d_indices_all.shape)
-        return points[:200, :2].sum(axis=1)
-        # def f_error(_KE, _points, _p3d_cam_indices_and_p2d, i, val):
-        #     indices = _p3d_cam_indices_and_p2d[i]
-        #     p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
+        print(points_3d.shape, points_2d_all.shape, p3d_indices_all.shape)
+        # error = reproject_points_vmap(KE, points_2d_all, p3d_indices_all, points_3d)
 
-        #     point = _points[p3d_i]  # points.take(p3d_i, axis=0)
-        #     KE_selected = _KE[cam_i]  # KE.take(cam_i, axis=0)
-        #     y = KE_selected @ point
-        #     y = y[:2] / y[3]
-        #     y = ((p2d - y) ** 2).sum()
-        #     # return ((p2d - p2d) ** 2).sum()
+        # scan(reproject_points_scan, 0, length=self.cam_num)
+        def f_error(i, val):
+            _KE = KE[i]
+            _p3d_indices = p3d_indices_all[i]
+            _points_2d = points_2d_all[i]
+            p3d_selected = points_3d.take(_p3d_indices, axis=0)
+            p2d_projected = jnp.einsum("ij,bj->bi", _KE, p3d_selected)
+            p2d_projected = p2d_projected[..., :2] / p2d_projected[..., 2:3]
 
-        #     return val + y
+            return val + ((p2d_projected - _points_2d) ** 2).sum()
 
-        # val = 0
-        # for i in range(0, len(p3d_cam_indices_and_p2d)):
-        #     indices = p3d_cam_indices_and_p2d[i]
-        #     p3d_i, cam_i, p2d = indices[0], indices[1], indices[2:]
+        return jnp.array([fori_loop(0, self.cam_num, f_error, 0)])
 
-        #     point = points[p3d_i]  # points.take(p3d_i, axis=0)
-        #     KE_selected = KE[cam_i]  # KE.take(cam_i, axis=0)
-        #     y = KE_selected @ point
-        #     y = y[:2] / y[3]
-        #     y = ((p2d - y) ** 2).sum()
-        #     val += y
-
-        # y = val
-        # return ((p2d - p2d) ** 2).sum()
-
-        # _f_error = Partial(
-        #     jit(f_error, static_argnums=[0, 1, 2]),
-        #     KE,
-        #     points,
-        #     p3d_cam_indices_and_p2d,
-        # )
-
-        # print(make_jaxpr(_f_error)(0, 0))
-
-        # y = fori_loop(
-        #     0,
-        #     len(p3d_cam_indices_and_p2d),
-        #     _f_error,
-        #     0,
-        # )
-
-        # reproject
-        # x = jnp.einsum("bij,bj->bi", KE_selected, p3d_selected)  # reprojected_points
-        # x = reproject_point(KE_selected, p3d_selected)
-        # y = y[..., :2] / y[..., 2:3]  # 2:3 to prevent axis from being removed
-
-        # error
-        # y = jnp.array([y])
-        # return y  # ((p2d_list - y) ** 2).sum(axis=1)
+        return error.sum(axis=1)
 
 
 class JaxBundleAdjustment:
@@ -176,12 +167,18 @@ class JaxBundleAdjustment:
 
         opt_params = jnp.concatenate([cam_params, intr_params, point_params])
 
-        # print(make_jaxpr(self.solver)(opt_params, points_2d_all, p3d_indices_all))
+        # print(
+        #     make_jaxpr(self.ba.get_residuals)(
+        #         opt_params, points_2d_all, p3d_indices_all
+        #     )
+        # )
 
+        # try:
         params, state = self.solver(opt_params, points_2d_all, p3d_indices_all)
         params = params.block_until_ready()
-
         return params, state
+        # except:
+        #     save_device_memory_profile("memory.prof")
 
     def compile(self, points_num, batch_size=8):
         # 6 for pose, 5 for intrinsics
