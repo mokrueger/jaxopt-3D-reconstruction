@@ -48,11 +48,11 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
             [(p.identifier, p.xyz) for p in self.dataset.points3D], key=lambda x: x[0]
         )
         p3d_ids = {j[0]: i for i, j in enumerate(p3d)}
-        points_3d_all = [(*p[1], 1) for p in p3d]
+        points_3d_all = [p[1] for p in p3d]
 
         map_2d_3d_list = []
 
-        for d_entry in self.dataset.datasetEntries:
+        for d_entry in self.dataset.datasetEntries[:2]:
             cam_poses.append(d_entry.camera.camera_pose.rotation_translation_matrix)
             intrinsics.append(d_entry.camera.camera_intrinsics.camera_intrinsics_matrix)
             map_2d_3d_list.append(d_entry.map2d_3d(self.dataset.points3D_mapped))
@@ -77,9 +77,9 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
 
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
-        p3d_indices_all = np.array(p3d_indices_all)
+        p3d_indices_all = np.array(p3d_indices_all)[..., :200]
         points_3d_all = np.array(points_3d_all)
-        points_2d_all = np.array(points_2d_all)
+        points_2d_all = np.array(points_2d_all)[..., :200, :]
 
         print(
             "points_2d_all: ",
@@ -174,8 +174,12 @@ if __name__ == "__main__":
         ]
     )
 
-    jaxopt_benchmark.optimize(jaxopt_benchmark.cam_poses, initial_intrinsics)
+    start = time.process_time()
+    params, state = jaxopt_benchmark.optimize(
+        jaxopt_benchmark.cam_poses, initial_intrinsics
+    )
 
+    print(state)
     # print("=== optimization ===")
     # cam_num = len(jaxopt_benchmark)
 

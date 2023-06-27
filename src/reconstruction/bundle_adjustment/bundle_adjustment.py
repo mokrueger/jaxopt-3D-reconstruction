@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import jax.scipy as jscipy
 import numpy as np
 import optax
 from jax import device_put, jit, make_jaxpr, vmap
@@ -6,7 +7,7 @@ from jax.experimental import sparse
 from jax.lax import associative_scan, fori_loop, scan
 from jax.profiler import save_device_memory_profile
 from jax.tree_util import Partial, register_pytree_node_class
-from jaxopt import LevenbergMarquardt, OptaxSolver
+from jaxopt import GradientDescent, LevenbergMarquardt, NonlinearCG, OptaxSolver
 from triangulation_relaxations import so3
 
 
@@ -98,11 +99,12 @@ class BundleAdjustment:
         intrinsics = parse_intrinsics(
             opt_params[cam_end_index:intr_end_index].reshape((-1, 5))
         )
-        points_3d = opt_params[intr_end_index:].reshape((-1, 4))
+        points_3d = opt_params[intr_end_index:].reshape((-1, 3))
+        points_4d = jnp.column_stack([points_3d, jnp.ones(len(points_3d))])
 
         # select corresponding poses and points
         KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
-        print(points_3d.shape, points_2d_all.shape, p3d_indices_all.shape)
+        print(points_4d.shape, points_2d_all.shape, p3d_indices_all.shape)
         # error = reproject_points_vmap(KE, points_2d_all, p3d_indices_all, points_3d)
 
         # scan(reproject_points_scan, 0, length=self.cam_num)
@@ -110,14 +112,14 @@ class BundleAdjustment:
             _KE = KE[i]
             _p3d_indices = p3d_indices_all[i]
             _points_2d = points_2d_all[i]
-            p3d_selected = points_3d.take(_p3d_indices, axis=0)
+            p3d_selected = points_4d.take(_p3d_indices, axis=0)
             p2d_projected = jnp.einsum("ij,bj->bi", _KE, p3d_selected)
             p2d_projected = p2d_projected[..., :2] / p2d_projected[..., 2:3]
 
             return val + ((p2d_projected - _points_2d) ** 2).sum()
 
+        # return fori_loop(0, self.cam_num, f_error, 0)
         return jnp.array([fori_loop(0, self.cam_num, f_error, 0)])
-
         return error.sum(axis=1)
 
 
@@ -140,14 +142,23 @@ class JaxBundleAdjustment:
         #     maxiter=1000,
         # )
 
+        def f_solver(matvec, b, ridge=None, init=None, **kwargs):
+            x, _ = jscipy.sparse.linalg.cg(matvec, b, x0=init)
+            return x
+
         opt = LevenbergMarquardt(
-            residual_fun=self.ba.get_residuals,
+            residual_fun=sparse.sparsify(self.ba.get_residuals),
             tol=1e-15,
             gtol=1e-15,
             jit=True,
-            # solver="inv",
-            # implicit_diff=False,
+            solver=f_solver,
         )
+
+        # opt = GradientDescent(
+        #     fun=self.ba.get_residuals,
+        #     tol=1e-6,
+        #     jit=True,
+        # )
 
         return opt, jit(opt.run)
 
@@ -173,10 +184,11 @@ class JaxBundleAdjustment:
         #     )
         # )
 
-        # try:
         params, state = self.solver(opt_params, points_2d_all, p3d_indices_all)
         params = params.block_until_ready()
         return params, state
+
+        # try:
         # except:
         #     save_device_memory_profile("memory.prof")
 
