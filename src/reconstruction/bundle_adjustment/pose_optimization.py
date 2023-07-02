@@ -1,9 +1,12 @@
 from functools import partial
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import device_put, jit, tree_util, vmap
 from jaxopt import LevenbergMarquardt
+
+jax.config.update("jax_enable_x64", True)
 
 
 def get_reprojection_residuals_cpu(pose, points, observations, intrinsics, mask):
