@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import time
 from functools import partial
+from pathlib import Path
 from typing import List
 from uuid import uuid4
 
@@ -29,15 +30,16 @@ from src.dataset.dataset import Dataset
 #  from src.benchmark.gtsam_benchmark.benchmark_single_pose import import benchmark_gtsam_single_pose
 from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 
-REICHSTAG_SPARSE_NOISED = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse_noised"
-REICHSTAG_SPARSE = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse"
-REICHSTAG_IMAGES = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+DATASET_FOLDER = os.path.join(str(Path(__file__).parent.parent.parent), "datasets")
+REICHSTAG_SPARSE_NOISED = os.path.join(DATASET_FOLDER, "reichstag/sparse_noised")
+REICHSTAG_SPARSE = os.path.join(DATASET_FOLDER, "reichstag/sparse")
+REICHSTAG_IMAGES = os.path.join(DATASET_FOLDER, "reichstag/images")
 
-SACRE_COEUR_SPARSE_NOISED = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/sparse_noised"
-SACRE_COEUR_IMAGES = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/images"
+SACRE_COEUR_SPARSE_NOISED = os.path.join(DATASET_FOLDER, "sacre_coeur/sparse_noised")
+SACRE_COEUR_IMAGES = os.path.join(DATASET_FOLDER, "sacre_coeur/images")
 
-ST_PETERS_SQUARE_SPARSE_NOISED = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/sparse_noised"
-ST_PETERS_SQUARE_IMAGES = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/images"
+ST_PETERS_SQUARE_SPARSE_NOISED = os.path.join(DATASET_FOLDER, "st_peters_square/sparse_noised")
+ST_PETERS_SQUARE_IMAGES = os.path.join(DATASET_FOLDER, "st_peters_square/images")
 
 
 def save_reprojection_error_histogram(list_of_benchmarks):
