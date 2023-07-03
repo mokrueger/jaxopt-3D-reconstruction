@@ -2,6 +2,7 @@ import collections
 import os
 import re
 import subprocess
+import time
 
 from dataclasses import dataclass
 
@@ -35,6 +36,8 @@ def perform_bundle_adjustment(input_path, output_path, bundle_adjustment_options
     output_path = output_path if output_path else "."
     if not bundle_adjustment_options:
         bundle_adjustment_options = BundleAdjustmentOptions()
+
+    start = time.perf_counter()
     p = subprocess.run([COLMAP_PATH, "bundle_adjuster",
                         "--input_path", input_path,
                         "--output_path", output_path,
@@ -50,9 +53,10 @@ def perform_bundle_adjustment(input_path, output_path, bundle_adjustment_options
                         "--BundleAdjustment.refine_extra_params", str(bundle_adjustment_options.refine_extra_params),
                         "--BundleAdjustment.refine_extrinsics", str(bundle_adjustment_options.refine_extrinsics)
                         ], stdout=subprocess.PIPE)
+    total_time = time.perf_counter() - start
     std_out = p.stdout.decode("utf-8")
     assert p.returncode == 0
-    return std_out
+    return std_out, total_time
 
 
 def _process_std_out(std_out):

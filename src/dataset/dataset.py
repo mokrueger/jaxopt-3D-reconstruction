@@ -1,7 +1,11 @@
 import copy
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import List, Dict, Optional
+from functools import partial
 from typing import List, Dict, Optional
 
+from src.benchmark.multiprocesser import ListMultiProcessor
 from src.dataset import np  # For the seed and reproducibility
 from scipy.spatial.transform import Rotation
 
@@ -55,6 +59,76 @@ class Dataset:
             d.refresh_mapping()
             new_dataset.refresh_mapping()
         return new_dataset
+
+    @staticmethod
+    def with_noise_mp(dataset: "Dataset", point3d_noise=3e-2, camera_rotation_noise=5e-2, camera_translation_noise=5e-2,
+                      camera_intrinsics_noise=10, point2d_noise=1):
+        new_dataset = copy.deepcopy(dataset)  # TODO: this is not performant
+        x = copy.deepcopy(new_dataset.points3D[0])
+
+        def _process_p(p, point3d_noise):
+            return p.translated_np(Dataset._random_direction() * point3d_noise)
+
+        print(new_dataset.points3D[0])
+        l = ListMultiProcessor(new_dataset.points3D, partial(_process_p, point3d_noise=3e-2))
+
+        new_dataset.points3D = l.process()
+
+        def _process_d(d: DatasetEntry):
+            d.camera.camera_pose.apply_move(  # TODO: check which distributions to use for random
+                Dataset._random_direction() * camera_translation_noise  # * np.random.randn(3)
+            )
+            d.camera.camera_pose.apply_transform_3d(
+                Rotation.from_rotvec(
+                    Dataset._random_direction() * camera_rotation_noise
+                ).as_matrix()  # * np.random.randn(3)
+            )
+            d.camera.camera_intrinsics.apply_noise(np.random.rand(3, 3) * camera_intrinsics_noise)
+            points2D = []
+            for p2 in d.points2D:
+                points2D.append(p2.translated_np(Dataset._random_direction_2d() * point2d_noise))
+            return DatasetEntry(image_metadata=d.image_metadata, points2D=points2D, camera=copy.deepcopy(d.camera))
+
+        l = ListMultiProcessor(dataset.datasetEntries, _process_d)
+        new_dataset.datasetEntries = l.process()
+
+        new_dataset.refresh_mapping()
+        return new_dataset
+
+    @property
+    def images_path(self):
+        if len(self.datasetEntries) > 0 and self.datasetEntries[0].image_metadata.image_path:
+            return str(Path(self.datasetEntries[0].image_metadata.image_path).parent)
+        return ""  # TODO: or raise error?
+
+    def compute_reprojection_errors(self):
+        reprojection_errors = {}
+        for index, de in enumerate(self.datasetEntries):
+            p2d, p3d = de.map2d_3d_np(self.points3D_mapped, zipped=False)
+            reprojection_errors.update({
+                index: de.camera.compute_projection_errors(p2d=p2d, p3d=p3d)
+            })
+        return reprojection_errors
+
+    # def compute_reprojection_errors_threaded(self):
+    #     reprojection_errors = {}
+    #
+    #     def _process_dataset_entry(index_dataset_entry, points3D_mapped):
+    #         index, dataset_entry = index_dataset_entry
+    #         p2d, p3d = dataset_entry.map2d_3d_np(points3D_mapped, zipped=False)
+    #         return {
+    #             index: dataset_entry.camera.compute_projection_errors(p2d=p2d, p3d=p3d)
+    #         }
+    #
+    #     lmp = ListMultiProcessor(
+    #         list(enumerate(self.datasetEntries)),
+    #         partial(_process_dataset_entry, points3D_mapped=self.points3D_mapped)
+    #     )
+    #     reprojection_dict_list = lmp.process()
+    #     for d in reprojection_dict_list:
+    #         reprojection_errors.update({**d})
+    #
+    #     return reprojection_errors
 
     #  @property
     def num_3d_points(self):

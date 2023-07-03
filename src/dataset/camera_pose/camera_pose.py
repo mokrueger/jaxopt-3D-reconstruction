@@ -294,3 +294,22 @@ class CameraPose:
         return np.linalg.norm(rotation_diff_matrix - np.identity(3))
         #  rotation_diff = Rotation.from_matrix(np.linalg.inv(cpo.rotation_matrix).dot(cpt.rotation_matrix))
         #  return np.linalg.norm(rotation_diff.as_rotvec())  # TODO: this was changed
+
+    @staticmethod
+    def compute_rotation_error_in_rad(camera_pose_one: "CameraPose", camera_pose_two: "CameraPose"):
+        cpo = camera_pose_one.in_direction(target_direction=TransformationDirection.C2W)
+        cpt = camera_pose_two.in_direction(target_direction=TransformationDirection.C2W)
+        rotation_diff_matrix = np.linalg.inv(cpo.rotation_matrix).dot(cpt.rotation_matrix)
+
+        r1 = rotation_diff_matrix[0:3, 0]  # TODO: Normalization probably not necessary
+        r2 = rotation_diff_matrix[0:3, 1]
+        r3 = rotation_diff_matrix[0:3, 2]
+        r1, r2, r3 = r1 / linalg.norm(r1), r2 / linalg.norm(r2), r3 / linalg.norm(r3)
+        rotation_diff_matrix = np.vstack([r1 / linalg.norm(r1), r2 / linalg.norm(r2), r3 / linalg.norm(r3)])
+
+        rotation_diff = Rotation.from_matrix(rotation_diff_matrix)
+        return np.linalg.norm(rotation_diff.as_rotvec())
+
+    @staticmethod
+    def compute_rotation_error_in_degrees(camera_pose_one: "CameraPose", camera_pose_two: "CameraPose"):
+        return CameraPose.compute_rotation_error_in_rad(camera_pose_one, camera_pose_two) * (180 / np.pi)

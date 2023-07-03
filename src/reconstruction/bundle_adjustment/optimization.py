@@ -1,10 +1,12 @@
 import jax.numpy as jnp
-from jax import vmap, jit, device_put
+from jax import vmap, jit, device_put, tree_util
 from jaxopt import LevenbergMarquardt, OptaxSolver
 
 from jax.experimental import sparse
 
 from triangulation_relaxations import so3
+
+from src.reconstruction.bundle_adjustment.bundle_adjustment import rot_mat_from_vec
 
 
 @jit
@@ -287,5 +289,5 @@ class JaxBundleAdjustment:
     @staticmethod
     def to_gpu(data):
         if isinstance(data, (list, tuple)):
-            return [device_put(i) for i in data]
+            return jnp.array([device_put(i) for i in data])
         return device_put(data)

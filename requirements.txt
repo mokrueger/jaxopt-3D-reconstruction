@@ -1,3 +1,42 @@
+# BEFORE MERGE
+numpy
+scipy
+tqdm
+matplotlib
+blender-plots
+git+https://github.com/Linusnie/robust-triangulation-relaxations.git
+ipympl
+ipykernel
+blender-notebook
+opencv-python
+
+# To read image metadata
+pillow==9.5.0
+pycolmap
+
+# MORITZ
+
+numpy
+scipy
+tqdm
+matplotlib
+blender-plots
+git+https://github.com/Linusnie/robust-triangulation-relaxations.git
+ipympl
+ipykernel
+blender-notebook
+opencv-python
+
+jaxopt==0.7
+
+# To read image metadata
+pillow==9.5.0
+pycolmap
+gtsam
+
+
+# KUTAY
+
 absl-py==1.4.0
 aiofiles==22.1.0
 aiosqlite==0.19.0

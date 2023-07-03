@@ -156,7 +156,7 @@ def ttest():
 
 if __name__ == "__main__":
     ttest()
-    path = "/home/morkru/Downloads/reichstag/dense/sparse/"
-    image_path = "/home/morkru/Downloads/reichstag/dense/images"
+    path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/"
+    image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
     ds = load_colmap_dataset(path, image_path, binary=True)
     #  benchmark_gtsam_absolute_pose(ds)

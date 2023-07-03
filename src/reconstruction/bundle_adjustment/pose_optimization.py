@@ -108,5 +108,5 @@ class JaxPoseOptimizer:
     @staticmethod
     def to_gpu(data):
         if isinstance(data, (list, tuple)):
-            return np.array([device_put(i) for i in data])
+            return jnp.array([device_put(i) for i in data])
         return device_put(data)

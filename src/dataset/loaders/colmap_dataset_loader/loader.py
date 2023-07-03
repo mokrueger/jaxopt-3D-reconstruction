@@ -1,4 +1,6 @@
 import os
+import subprocess
+
 import numpy as np
 from pathlib import Path
 
@@ -41,17 +43,8 @@ def _get_image_width_height(image_path):
     return width, height
 
 
-def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False, name=None):
-    if binary:
-        points = read_points3d_bin(os.path.join(path_to_sparse_folder, "points3D.bin"))
-        images = read_images_bin(os.path.join(path_to_sparse_folder, "images.bin"))
-        cameras = read_cameras_bin(os.path.join(path_to_sparse_folder, "cameras.bin"))
-    else:
-        points = read_points3d_txt(os.path.join(path_to_sparse_folder, "points3D.txt"))
-        images = read_images_txt(os.path.join(path_to_sparse_folder, "images.txt"))
-        cameras = read_cameras_txt(os.path.join(path_to_sparse_folder, "cameras.txt"))
-
-    points3D = list(map(lambda p: Point3D(
+def _parse_points(points):
+    return list(map(lambda p: Point3D(
         p.point_information.point3d_id,
         p.point_information.x,
         p.point_information.y,
@@ -63,6 +56,8 @@ def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False, nam
         }
     ), points.values()))
 
+
+def _parse_dataset_entries(images, cameras, path_to_images):
     datasetEntries = []
     for im in images.values():
         image_path = os.path.join(path_to_images, im.image_information.name)
@@ -91,6 +86,63 @@ def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False, nam
                         camera_intrinsics=camera_intrinsics,
                         width=width, height=height)
         datasetEntries.append(DatasetEntry(image_metadata, points2D, camera))
+    return datasetEntries
+
+
+def _parse_cameras_only(images, cameras, path_to_images):  # Note: this is mainly here to evaluate colmap benchmark
+    parsed_cameras = {}
+    for im in images.values():
+        image_path = os.path.join(path_to_images, im.image_information.name)
+        width, height = _get_image_width_height(image_path)
+        camera_pose = CameraPose.from_string_wxyz_quaternion_translation(f"{im.image_information.qw} "
+                                                                         f"{im.image_information.qx} "
+                                                                         f"{im.image_information.qy} "
+                                                                         f"{im.image_information.qz} "
+                                                                         f"{im.image_information.tx} "
+                                                                         f"{im.image_information.ty} "
+                                                                         f"{im.image_information.tz}",
+                                                                         identifier=Path(
+                                                                             im.image_information.name).name,
+                                                                         coordinate_system=CoordinateSystem.COLMAP,
+                                                                         direction=TransformationDirection.W2C
+                                                                         # !!! W2C !!!
+                                                                         )
+        camera_intrinsics = get_intrinsics(cameras.get(im.image_information.camera_id))
+        parsed_cameras.update(
+            {
+                im.image_information.image_id: Camera(camera_pose=camera_pose,
+                                                      camera_intrinsics=camera_intrinsics,
+                                                      width=width, height=height)
+            }
+        )
+    return parsed_cameras
+
+
+def load_colmap_cameras(path_to_sparse_folder, path_to_images, binary=False):
+    if binary:
+        images = read_images_bin(os.path.join(path_to_sparse_folder, "images.bin"))
+        cameras = read_cameras_bin(os.path.join(path_to_sparse_folder, "cameras.bin"))
+    else:
+        images = read_images_txt(os.path.join(path_to_sparse_folder, "images.txt"))
+        cameras = read_cameras_txt(os.path.join(path_to_sparse_folder, "cameras.txt"))
+
+    parsed_cameras = _parse_cameras_only(images, cameras, path_to_images)
+    return parsed_cameras
+
+
+def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False, name=None):
+    if binary:
+        points = read_points3d_bin(os.path.join(path_to_sparse_folder, "points3D.bin"))
+        images = read_images_bin(os.path.join(path_to_sparse_folder, "images.bin"))
+        cameras = read_cameras_bin(os.path.join(path_to_sparse_folder, "cameras.bin"))
+    else:
+        points = read_points3d_txt(os.path.join(path_to_sparse_folder, "points3D.txt"))
+        images = read_images_txt(os.path.join(path_to_sparse_folder, "images.txt"))
+        cameras = read_cameras_txt(os.path.join(path_to_sparse_folder, "cameras.txt"))
+
+    points3D = _parse_points(points)
+    datasetEntries = _parse_dataset_entries(images, cameras, path_to_images)
+
     return Dataset(points3D, datasetEntries, name=name)
 
 
@@ -101,6 +153,8 @@ def export_in_colmap_format(ds: Dataset, output_path, binary=False):
     cameras = []
     base_images = []
     points3D = []
+
+    os.makedirs(output_path, exist_ok=True)
 
     for index, d in enumerate(ds.datasetEntries, start=1):
         cameras.append(
@@ -114,15 +168,15 @@ def export_in_colmap_format(ds: Dataset, output_path, binary=False):
         scipy_qvec = d.camera.camera_pose.in_direction(TransformationDirection.W2C).rotation.as_quat()
         base_images.append(
             BaseImage(index,
-                      qvec=[scipy_qvec[3], scipy_qvec[0], scipy_qvec[1], scipy_qvec[2]],
+                      qvec=np.array([scipy_qvec[3], scipy_qvec[0], scipy_qvec[1], scipy_qvec[2]]),
                       tvec=d.camera.camera_pose.in_direction(TransformationDirection.W2C).translation,
                       camera_id=index,
                       name=d.image_metadata.identifier,
-                      xys=list(map(lambda p: list(p.xy), d.points2D)),
-                      point3D_ids=list(map(
+                      xys=np.array(list(map(lambda p: list(p.xy), d.points2D))),
+                      point3D_ids=np.array(list(map(
                           lambda p: p.point3D_identifier if p.point3D_identifier is not None else -1,
                           d.points2D))
-                      )
+                      ))
         )
     img_id_point2d = [(i, p) for i, d in enumerate(ds.datasetEntries, start=1) for p in d.points_with_3d()]
     auxiliary_mapping = {}
@@ -137,8 +191,8 @@ def export_in_colmap_format(ds: Dataset, output_path, binary=False):
                     xyz=p.xyz,
                     rgb=p.metadata.get("rgb") if p.metadata.get("rgb") is not None else np.array([255, 255, 255]),
                     error=p.metadata.get("error") if p.metadata.get("error") is not None else 999,
-                    image_ids=image_ids,
-                    point2D_idxs=point2d_idxs)
+                    image_ids=np.array(image_ids),
+                    point2D_idxs=np.array(point2d_idxs))
         )
     cameras = {c.id: c for c in cameras}
     base_images = {b.id: b for b in base_images}
@@ -153,7 +207,53 @@ def export_in_colmap_format(ds: Dataset, output_path, binary=False):
         write_points3D_text(points3D, os.path.join(output_path, "points3D.txt"))
 
 
+# TODO: Decide where this goes
+def show_in_colmap(sparse_path, image_path, database_path="/tmp/tmp.db", block=False):
+    COLMAP_CMD = "colmap"
+    if block:
+        p = subprocess.run([COLMAP_CMD, "gui",
+                            "--import_path", sparse_path,
+                            "--database_path", database_path,
+                            "--image_path", image_path,
+                            ], stdout=subprocess.PIPE)
+    else:
+        subprocess.Popen([COLMAP_CMD, "gui",
+                          "--import_path", sparse_path,
+                          "--database_path", database_path,
+                          "--image_path", image_path,
+                          ], stdout=subprocess.PIPE)
+
+
 if __name__ == "__main__":
-    path = "/home/morkru/Downloads/reichstag/dense/sparse/"
-    image_path = "/home/morkru/Downloads/reichstag/dense/images"
-    dataset = load_colmap_dataset(path, image_path)
+    # path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/"
+    # image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+    # dataset = load_colmap_dataset(path, image_path)
+
+    reichstag_sparse = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse"
+    reichstag_images = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+
+    sacre_coeur_sparse = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/sparse"
+    sacre_coeur_images = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/images"
+
+    st_peters_square_sparse = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/sparse"
+    st_peters_square_images = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/images"
+
+    print("reichstag")
+    ds = load_colmap_dataset(reichstag_sparse, reichstag_images, binary=True)
+    ds = Dataset.with_noise_mp(ds)
+    export_in_colmap_format(ds, "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse_noised",
+                            binary=True)
+
+    print("sacre")
+    ds = load_colmap_dataset(sacre_coeur_sparse, sacre_coeur_images, binary=True)
+    ds = Dataset.with_noise_mp(ds)
+    export_in_colmap_format(ds,
+                            "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/sparse_noised",
+                            binary=True)
+
+    print("peter")
+    ds = load_colmap_dataset(st_peters_square_sparse, st_peters_square_images, binary=True)
+    ds = Dataset.with_noise_mp(ds)
+    export_in_colmap_format(ds,
+                            "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/sparse_noised",
+                            binary=True)

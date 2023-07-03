@@ -66,5 +66,5 @@ def read_images_txt(file):
 
 
 if __name__ == "__main__":
-    im1 = read_images_bin("/home/morkru/Downloads/reichstag/dense/sparse" + "/images.bin")
-    im2 = read_images_txt("/home/morkru/Downloads/reichstag/dense/sparse/TXT" + "/images.txt")
+    im1 = read_images_bin("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse" + "/images.bin")
+    im2 = read_images_txt("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT" + "/images.txt")

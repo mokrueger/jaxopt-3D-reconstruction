@@ -43,3 +43,7 @@ class DatasetEntry:
     @property
     def num_2d_points(self):
         return len(self.points2D)
+
+    @property
+    def identifier(self):
+        return self.image_metadata.identifier

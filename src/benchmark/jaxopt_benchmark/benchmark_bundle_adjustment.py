@@ -15,6 +15,7 @@ from src.reconstruction.bundle_adjustment.bundle_adjustment import JaxBundleAdju
 
 
 class JaxoptBundleAdjustmentBenchmark(Benchmark):
+    FRAMEWORK = "JAX"
     def __init__(self, dataset: Dataset):
         self.dataset = dataset
 

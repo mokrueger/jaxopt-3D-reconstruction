@@ -57,5 +57,5 @@ def read_points3d_txt(file):
 
 
 if __name__ == "__main__":
-    pt1 = read_points3d_bin("/home/morkru/Downloads/reichstag/dense/sparse" + "/points3D.bin")
-    pt2 = read_points3d_txt("/home/morkru/Downloads/reichstag/dense/sparse/TXT" + "/points3D.txt")
+    pt1 = read_points3d_bin("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse" + "/points3D.bin")
+    pt2 = read_points3d_txt("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT" + "/points3D.txt")

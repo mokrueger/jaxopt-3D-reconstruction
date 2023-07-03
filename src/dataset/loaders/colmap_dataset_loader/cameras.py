@@ -62,5 +62,5 @@ def read_cameras_txt(file):
 
 
 if __name__ == "__main__":
-    c1 = read_cameras_txt("/home/morkru/Downloads/reichstag/dense/sparse/TXT" + "/cameras.txt")
-    c2 = read_cameras_bin("/home/morkru/Downloads/reichstag/dense/sparse" + "/cameras.bin")
+    c1 = read_cameras_txt("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT" + "/cameras.txt")
+    c2 = read_cameras_bin("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse" + "/cameras.bin")

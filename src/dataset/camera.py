@@ -70,3 +70,12 @@ class Camera:
 
     def compute_projection_errors(self, p2d, p3d):  # TODO: this is technically duplicate code
         return [np.linalg.norm(p2 - self.project(p3)) for p2, p3 in zip(p2d, p3d)]
+
+    @staticmethod
+    def difference(camera_1: "Camera", camera_2: "Camera"):
+        return {
+            "identity_error": CameraPose.compute_rotation_error(camera_1.camera_pose, camera_2.camera_pose),
+            "rad": CameraPose.compute_rotation_error_in_rad(camera_1.camera_pose, camera_2.camera_pose),
+            "degrees": CameraPose.compute_rotation_error_in_degrees(camera_1.camera_pose, camera_2.camera_pose),
+            "positional": CameraPose.compute_position_error(camera_1.camera_pose, camera_2.camera_pose),
+        }
