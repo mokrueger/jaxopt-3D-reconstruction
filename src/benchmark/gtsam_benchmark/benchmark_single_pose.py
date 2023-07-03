@@ -1,3 +1,5 @@
+import os
+
 import gtsam
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +10,7 @@ from gtsam import (symbol_shorthand, SmartProjectionPose3Factor, Cal3_S2, Levenb
 from gtsam.examples import SFMdata
 from gtsam.utils import plot
 
+from src.config import DATASETS_PATH
 from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.dataset.dataset import Dataset
 
@@ -156,7 +159,7 @@ def ttest():
 
 if __name__ == "__main__":
     ttest()
-    path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/"
-    image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+    path = os.path.join(DATASETS_PATH, "reichstag/sparse/")
+    image_path = os.path.join(DATASETS_PATH, "reichstag/images")
     ds = load_colmap_dataset(path, image_path, binary=True)
     #  benchmark_gtsam_absolute_pose(ds)

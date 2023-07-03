@@ -1,8 +1,10 @@
+import os
 import struct
 from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
+from src.config import DATASETS_PATH
 from src.dataset.loaders.colmap_dataset_loader.read_write_model import read_cameras_text
 
 
@@ -62,5 +64,5 @@ def read_cameras_txt(file):
 
 
 if __name__ == "__main__":
-    c1 = read_cameras_txt("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT" + "/cameras.txt")
-    c2 = read_cameras_bin("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse" + "/cameras.bin")
+    c1 = read_cameras_txt(os.path.join(DATASETS_PATH, "reichstag/sparse/TXT" + "/cameras.txt"))
+    c2 = read_cameras_bin(os.path.join(DATASETS_PATH, "reichstag/sparse" + "/cameras.bin"))

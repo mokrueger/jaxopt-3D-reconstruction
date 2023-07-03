@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from src.config import DATASETS_PATH
 from src.dataset.camera import Camera, CameraIntrinsics
 from src.dataset.dataset import Dataset
 from src.dataset.datasetEntry import DatasetEntry
@@ -229,31 +230,26 @@ if __name__ == "__main__":
     # image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
     # dataset = load_colmap_dataset(path, image_path)
 
-    reichstag_sparse = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse"
-    reichstag_images = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+    reichstag_sparse = os.path.join(DATASETS_PATH, "reichstag/sparse")
+    reichstag_images = os.path.join(DATASETS_PATH, "reichstag/images")
 
-    sacre_coeur_sparse = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/sparse"
-    sacre_coeur_images = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/images"
+    sacre_coeur_sparse = os.path.join(DATASETS_PATH, "sacre_coeur/sparse")
+    sacre_coeur_images = os.path.join(DATASETS_PATH, "sacre_coeur/images")
 
-    st_peters_square_sparse = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/sparse"
-    st_peters_square_images = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/images"
+    st_peters_square_sparse = os.path.join(DATASETS_PATH, "st_peters_square/sparse")
+    st_peters_square_images = os.path.join(DATASETS_PATH, "st_peters_square/images")
 
     print("reichstag")
     ds = load_colmap_dataset(reichstag_sparse, reichstag_images, binary=True)
     ds = Dataset.with_noise_mp(ds)
-    export_in_colmap_format(ds, "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse_noised",
-                            binary=True)
+    export_in_colmap_format(ds, os.path.join(DATASETS_PATH, "reichstag/sparse_noised"), binary=True)
 
     print("sacre")
     ds = load_colmap_dataset(sacre_coeur_sparse, sacre_coeur_images, binary=True)
     ds = Dataset.with_noise_mp(ds)
-    export_in_colmap_format(ds,
-                            "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/sacre_coeur/sparse_noised",
-                            binary=True)
+    export_in_colmap_format(ds, os.path.join(DATASETS_PATH, "sacre_coeur/sparse_noised"), binary=True)
 
     print("peter")
     ds = load_colmap_dataset(st_peters_square_sparse, st_peters_square_images, binary=True)
     ds = Dataset.with_noise_mp(ds)
-    export_in_colmap_format(ds,
-                            "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/st_peters_square/sparse_noised",
-                            binary=True)
+    export_in_colmap_format(ds, os.path.join(DATASETS_PATH, "st_peters_square/sparse_noised"), binary=True)

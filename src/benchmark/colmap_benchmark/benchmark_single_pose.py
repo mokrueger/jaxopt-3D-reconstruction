@@ -1,3 +1,4 @@
+import os
 import time
 import timeit
 from functools import partial
@@ -7,6 +8,7 @@ import numpy as np
 from pycolmap import AbsolutePoseRefinementOptions, RANSACOptions
 
 from src.benchmark.benchmark import SinglePoseBenchmark, SinglePoseBenchmarkResults
+from src.config import DATASETS_PATH
 from src.dataset.camera import Camera
 from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
 from src.dataset.dataset import Dataset
@@ -164,8 +166,8 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
 
 
 if __name__ == "__main__":
-    path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT"
-    image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+    path = os.path.join(DATASETS_PATH, "reichstag/sparse/TXT")
+    image_path = os.path.join(DATASETS_PATH, "reichstag/images")
     ds = load_colmap_dataset(path, image_path, binary=False)
 
     colmapSinglePoseBenchmark = ColmapSinglePoseBenchmark(ds)

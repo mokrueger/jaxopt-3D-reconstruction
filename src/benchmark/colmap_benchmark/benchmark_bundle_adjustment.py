@@ -3,6 +3,7 @@ import shutil
 
 from src.benchmark.benchmark import BundleAdjustmentBenchmark, BundleAdjustmentBenchmarkResults
 from src.benchmark.colmap_benchmark.bundle_adjuster import perform_bundle_adjustment, _process_std_out
+from src.config import DATASETS_PATH
 from src.dataset.loaders.colmap_dataset_loader.cameras import read_cameras_bin
 from src.dataset.loaders.colmap_dataset_loader.images import read_images_bin
 from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset, export_in_colmap_format, \
@@ -42,8 +43,8 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
 
 if __name__ == "__main__":
-    path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT"
-    image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+    path = os.path.join(DATASETS_PATH, "reichstag/sparse/TXT")
+    image_path = os.path.join(DATASETS_PATH, "reichstag/images")
     ds = load_colmap_dataset(path, image_path, binary=False)
 
     colmapBundleAdjustmentBenchmark = ColmapBundleAdjustmentBenchmark(ds)

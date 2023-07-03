@@ -6,6 +6,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation
 
 from src.benchmark.jaxopt_benchmark.helpers import create_plot, _parse_output_params
+from src.config import DATASETS_PATH
 from src.dataset.camera import Camera
 from src.dataset.camera_pose.camera_pose import CameraPose
 from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
@@ -165,7 +166,7 @@ if __name__ == "__main__":
     #
 
     #  ds_path = os.path.join(src_path, "dataset", "reichstag", "dense")
-    ds_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/"
+    ds_path = os.path.join(DATASETS_PATH, "reichstag/")
 
     config = {
         "add_noise": True,

@@ -1,3 +1,4 @@
+import os
 import time
 
 import gtsam
@@ -6,6 +7,7 @@ from gtsam import symbol_shorthand, PriorFactorPinholeCameraCal3_S2, GeneralSFMF
 from gtsam import (LevenbergMarquardtOptimizer, NonlinearFactorGraph, PriorFactorPoint3, Values)
 
 from src.benchmark.benchmark import BundleAdjustmentBenchmark, BundleAdjustmentBenchmarkResults
+from src.config import DATASETS_PATH
 from src.dataset.camera import Camera, CameraIntrinsics
 from src.dataset.camera_pose.camera_pose import CameraPose
 from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
@@ -132,8 +134,8 @@ class GtsamBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
 
 if __name__ == "__main__":
-    path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/"
-    image_path = "/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/images"
+    path = os.path.join(DATASETS_PATH, "reichstag/sparse/")
+    image_path = os.path.join(DATASETS_PATH, "reichstag/images")
     ds = load_colmap_dataset(path, image_path, binary=True)
 
     gtsamBundleAdjustmentBenchmark = GtsamBundleAdjustmentBenchmark(ds)

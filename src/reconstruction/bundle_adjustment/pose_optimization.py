@@ -6,7 +6,7 @@ import numpy as np
 from jax import device_put, jit, tree_util, vmap
 from jaxopt import LevenbergMarquardt
 
-jax.config.update("jax_enable_x64", True)
+#  jax.config.update("jax_enable_x64", True)
 
 
 def get_reprojection_residuals_cpu(pose, points, observations, intrinsics, mask):
@@ -83,6 +83,10 @@ class JaxPoseOptimizer:
         _observations_gpu = jnp.zeros((batch_size, points_num, 2))
         _mask_gpu = jnp.zeros((batch_size, points_num), dtype=bool)
 
+        # opt_params = jnp.array(np.random.rand(11))  # 6 for pose, 5 for intrinsics
+        # _points_gpu = jnp.array(np.random.rand(*point_shape))
+        # _observations_gpu = jnp.array(np.random.rand(*observations_shape))
+        # _mask_gpu = jnp.array(np.random.choice(a=[False, True], size=points_num))
         self.solver(
             opt_params, _points_gpu, _observations_gpu, _mask_gpu
         ).params.block_until_ready()

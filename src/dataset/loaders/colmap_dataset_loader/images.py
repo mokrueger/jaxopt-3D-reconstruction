@@ -1,7 +1,9 @@
+import os
 import struct
 from dataclasses import dataclass
 from typing import List, Union
 
+from src.config import DATASETS_PATH
 from src.dataset.loaders.colmap_dataset_loader.read_write_model import read_images_text
 
 
@@ -66,5 +68,5 @@ def read_images_txt(file):
 
 
 if __name__ == "__main__":
-    im1 = read_images_bin("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse" + "/images.bin")
-    im2 = read_images_txt("/home/morkru/Desktop/Github/jaxopt-3D-reconstruction/datasets/reichstag/sparse/TXT" + "/images.txt")
+    im1 = read_images_bin(os.path.join(DATASETS_PATH, "reichstag/sparse" + "/images.bin"))
+    im2 = read_images_txt(os.path.join(DATASETS_PATH, "reichstag/sparse/TXT" + "/images.txt"))
