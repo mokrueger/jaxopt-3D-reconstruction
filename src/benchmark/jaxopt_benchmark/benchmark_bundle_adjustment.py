@@ -1,12 +1,17 @@
-import os
 import sys
-import time
 
-src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction/"
+src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction"
 if src_path not in sys.path:
     sys.path.append(src_path)
 
+import os
+import time
+
+import jax
 import numpy as np
+
+jax.config.update("jax_platform_name", "cpu")
+
 
 from src.benchmark.benchmark import Benchmark
 from src.dataset.dataset import Dataset
@@ -16,6 +21,7 @@ from src.reconstruction.bundle_adjustment.bundle_adjustment import JaxBundleAdju
 
 class JaxoptBundleAdjustmentBenchmark(Benchmark):
     FRAMEWORK = "JAX"
+
     def __init__(self, dataset: Dataset):
         self.dataset = dataset
 
@@ -45,20 +51,20 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         points_2d_all = []
         p3d_indices_all = []
 
-        p3d = sorted(
-            [(p.identifier, p.xyz) for p in self.dataset.points3D], key=lambda x: x[0]
-        )
-        p3d_ids = {j[0]: i for i, j in enumerate(p3d)}
-        points_3d_all = [p[1] for p in p3d]
-
         map_2d_3d_list = []
+        p3d = {}
 
-        for d_entry in self.dataset.datasetEntries[:2]:
+        for d_entry in self.dataset.datasetEntries[:15]:
             cam_poses.append(d_entry.camera.camera_pose.rotation_translation_matrix)
             intrinsics.append(d_entry.camera.camera_intrinsics.camera_intrinsics_matrix)
             map_2d_3d_list.append(d_entry.map2d_3d(self.dataset.points3D_mapped))
+            p3d.update({p3.identifier: p3.xyz for _, p3 in map_2d_3d_list[-1]})
 
         max_2d_indices = max(len(i) for i in map_2d_3d_list)
+
+        p3d = sorted(p3d.items(), key=lambda x: x[0])
+        p3d_ids = {j[0]: i for i, j in enumerate(p3d)}
+        points_3d_all = [p[1] for p in p3d]
 
         for map2d_3d in map_2d_3d_list:
             points_2d = []
@@ -115,6 +121,17 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
             self.p3d_indices_all_gpu,
         )
 
+    def benchmark(self, *args, **kwargs):
+        pass
+
+    @property
+    def results(self):
+        raise NotImplementedError
+
+    @property
+    def time(self):
+        raise NotImplementedError
+
 
 from src.reconstruction.bundle_adjustment.pose_optimization import (
     get_reprojection_residuals_cpu,
@@ -125,7 +142,7 @@ if __name__ == "__main__":
     # configuration
     #
 
-    ds_path = os.path.join(src_path, "dataset", "reichstag", "dense")
+    ds_path = os.path.join(src_path, "datasets", "reichstag")
 
     config = {
         "add_noise": True,
@@ -211,32 +228,32 @@ if __name__ == "__main__":
     # initial losses
     #
 
-    initial_losses = []
-    for camera_index in range(cam_num):
-        loss = get_reprojection_residuals_cpu(
-            jaxopt_benchmark.cam_poses[camera_index],
-            jaxopt_benchmark.points[camera_index],
-            jaxopt_benchmark.observations[camera_index],
-            jaxopt_benchmark.intrinsics[camera_index],
-            jaxopt_benchmark.masks[camera_index],
-        ).sum()
+    # initial_losses = []
+    # for camera_index in range(cam_num):
+    #     loss = get_reprojection_residuals_cpu(
+    #         jaxopt_benchmark.cam_poses[camera_index],
+    #         jaxopt_benchmark.points[camera_index],
+    #         jaxopt_benchmark.observations[camera_index],
+    #         jaxopt_benchmark.intrinsics[camera_index],
+    #         jaxopt_benchmark.masks[camera_index],
+    #     ).sum()
 
-        initial_losses.append(loss)
+    #     initial_losses.append(loss)
 
-    #
-    # plot
-    #
+    # #
+    # # plot
+    # #
 
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
-    plt.rcParams.update({"font.size": 14})
-    fig, ax = plt.subplots(1, 1, figsize=(12, 8), dpi=400)
+    # plt.rcParams.update({"font.size": 14})
+    # fig, ax = plt.subplots(1, 1, figsize=(12, 8), dpi=400)
 
-    ax.bar(np.arange(cam_num), initial_losses, color="r", label="initial")
-    ax.bar(np.arange(cam_num), losses, color="g", label="optimized")
+    # ax.bar(np.arange(cam_num), initial_losses, color="r", label="initial")
+    # ax.bar(np.arange(cam_num), losses, color="g", label="optimized")
 
-    ax.set_xlabel("camera number")
-    ax.set_ylabel("cost function")
-    ax.legend()
-    fig.savefig("test_jaxopt.png")
-    fig.show()
+    # ax.set_xlabel("camera number")
+    # ax.set_ylabel("cost function")
+    # ax.legend()
+    # fig.savefig("test_jaxopt.png")
+    # fig.show()
