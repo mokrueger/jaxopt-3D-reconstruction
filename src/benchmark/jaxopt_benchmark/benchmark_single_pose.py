@@ -1,10 +1,5 @@
-import sys
-
-src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction"
-if src_path not in sys.path:
-    sys.path.append(src_path)
-
 import os
+import sys
 import time
 from datetime import datetime
 
@@ -78,7 +73,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         for _, e in enumerate(self.dataset.datasetEntries):
             cam = e.camera
 
-            mapped_points = e.map2d_3d_np(self.dataset.points3D_mapped, zipped=False)
+            mapped_points = e.map2d_3d(self.dataset.points3D_mapped, zipped=False, np=True)
             p_2d, p_3d = [np.array(l) for l in mapped_points]
             p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
 
@@ -97,7 +92,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         self.optimizer.compile(self.initial_point_sizes[index], batch_size=1)
 
     def optimize(
-        self, index: int, initial_pose: np.array, initial_intrinsics: np.array
+            self, index: int, initial_pose: np.array, initial_intrinsics: np.array
     ):
         return self.optimizer.optimize(
             np.expand_dims(initial_pose, 0),

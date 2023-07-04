@@ -47,7 +47,7 @@ def save_reprojection_error_histogram(list_of_benchmarks):
     os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
     reprojection_errors = []
     for benchmark in list_of_benchmarks:
-        _, _, reprojection_error = benchmark.reprojection_error_histogram()
+        reprojection_error = benchmark.reprojection_errors()
         reprojection_errors.append(reprojection_error)
 
     fig: plt.Figure
@@ -56,22 +56,20 @@ def save_reprojection_error_histogram(list_of_benchmarks):
 
     hist_data = np.histogram(reprojection_errors, bins="auto")
     # Filter counts of below 1% of top height to get new bins
-    new_hist_data = [[], []]
-    for index in range(len(hist_data[0])):
-        if hist_data[0][index] < max(hist_data[0]) * 0.01:
-            continue
-        new_hist_data[0].append(hist_data[0][index])
-        new_hist_data[1].append(hist_data[1][index])
-    new_hist_data = (np.array(new_hist_data[0]), np.array(new_hist_data[1]))
-    bins = new_hist_data[1]
+    threshold = np.max(hist_data[0]) * 0.01
+    indices = np.where(hist_data[0] >= threshold)[0]
+    bins = hist_data[1][indices]
 
     filtered_reprojection_errors = []
     for re in reprojection_errors:
-        filtered_reprojection_errors.append(list(filter(lambda x: x <= bins[-1] + 5e-01, re)))
+        filtered_reprojection_errors.append(re[np.where(re <= bins[-1] + 5e-01)])
 
     for re, b in list(zip(filtered_reprojection_errors, list_of_benchmarks)):
         ax.hist(re, bins=bins, alpha=1 / len(list_of_benchmarks), label=b.FRAMEWORK)
-    ax.set_xlabel(f"Squared reprojection error (meters)")
+        #ax.axvline(re.mean(), color='k', linestyle='dashed', linewidth=1)
+        #min_ylim, max_ylim = ax.get_ylim()
+        #plt.text(re.mean() * 1.1, max_ylim * 0.9, 'Mean: {:.2f}'.format(re.mean()))
+    ax.set_xlabel(f"Squared reprojection error")
     ax.set_ylabel("Count")
     ax.legend(loc='upper right')
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
@@ -166,8 +164,8 @@ def save_runtime_plot(list_of_benchmarks):
 
 
 def single_pose_statistics(list_of_benchmarks: List[Benchmark]):
-    save_runtime_plot(list_of_benchmarks)
     save_reprojection_error_histogram(list_of_benchmarks)
+    save_runtime_plot(list_of_benchmarks)
 
     #  Camera.difference(list(cr.camera_mapping.values())[0], list(jr.camera_mapping.values())[0])
     #  colmapSinglePoseBenchmark.export_results_in_colmap_format(open_in_colmap=True)

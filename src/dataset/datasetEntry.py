@@ -22,19 +22,16 @@ class DatasetEntry:
     def refresh_mapping(self):  # TODO: Technically using @property would be better but slows down debugging
         self.points2D_mapped = {p.identifier: p for p in self.points2D}
 
-    def map2d_3d(self, points3D_mapped, zipped=True):
+    def map2d_3d(self, points3D_mapped, zipped=True, np=False):
         if zipped:
-            return [(p, points3D_mapped.get(p.point3D_identifier)) for p in self.points_with_3d()]
+            if not np:
+                return [(p, points3D_mapped.get(p.point3D_identifier)) for p in self.points_with_3d()]
+            return [(p.xy, points3D_mapped.get(p.point3D_identifier).xyz) for p in self.points_with_3d()]
         points_with_3d = self.points_with_3d()
-        return points_with_3d, [points3D_mapped.get(p.point3D_identifier) for p in points_with_3d]
-
-    def map2d_3d_np(self, points3D_mapped, zipped=True):
-        if zipped:
-            return list(
-                map(lambda p2d_p3d: (p2d_p3d[0].xy, p2d_p3d[1].xyz), self.map2d_3d(points3D_mapped, zipped=zipped))
-            )
-        p2d, p3d = self.map2d_3d(points3D_mapped, zipped=zipped)
-        return list(map(lambda p: p.xy, p2d)), list(map(lambda p: p.xyz, p3d))
+        if not np:
+            return points_with_3d, [points3D_mapped.get(p.point3D_identifier) for p in points_with_3d]
+        return list(map(lambda p: p.xy, points_with_3d)), \
+            [points3D_mapped.get(p.point3D_identifier).xyz for p in points_with_3d]
 
     @property
     def num_3d_points(self):

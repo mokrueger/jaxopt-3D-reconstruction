@@ -133,24 +133,35 @@ class SinglePoseBenchmark(Benchmark, ABC):
         if open_in_colmap:
             show_in_colmap(output_path, shallow_results_dataset.images_path, block=False)
 
-    def reprojection_error_histogram(self, loss_function=lambda x: x, show=False):
+    # def reprojection_error_histogram(self, loss_function=lambda x: x, show=False): # TODO: DEPRECATED!!
+    #     if self._results:
+    #         dataset = self.shallow_results_dataset()
+    #         #  reprojection_errors = dataset.compute_reprojection_errors()  # TODO: here loss_function
+    #         reprojection_errors = dataset.compute_reprojection_errors_alt()
+    #         reprojection_errors_list = np.array(
+    #             [item for sublist in list(reprojection_errors.values()) for item in sublist]
+    #         )
+    #         fig: plt.Figure;
+    #         ax: plt.Axes
+    #         fig, ax = plt.subplots()
+    #         ax.hist(reprojection_errors_list, bins="auto")
+    #         ax.set_xlabel(f"Squared reprojection error (meters)")
+    #         ax.set_ylabel("Count")
+    #         ax.set_title(f"{self.NAME} ({self.dataset.name})")
+    #         if show:
+    #             plt.show()
+    #         return fig, ax, reprojection_errors_list
+    #     raise AttributeError
+
+    def reprojection_errors(self, loss_function=lambda x: x, show=False):
         if self._results:
             dataset = self.shallow_results_dataset()
             #  reprojection_errors = dataset.compute_reprojection_errors()  # TODO: here loss_function
-            reprojection_errors = dataset.compute_reprojection_errors()
+            reprojection_errors = dataset.compute_reprojection_errors_alt()
             reprojection_errors_list = np.array(
                 [item for sublist in list(reprojection_errors.values()) for item in sublist]
             )
-            fig: plt.Figure;
-            ax: plt.Axes
-            fig, ax = plt.subplots()
-            ax.hist(reprojection_errors_list, bins="auto")
-            ax.set_xlabel(f"Squared reprojection error (meters)")
-            ax.set_ylabel("Count")
-            ax.set_title(f"{self.NAME} ({self.dataset.name})")
-            if show:
-                plt.show()
-            return fig, ax, reprojection_errors_list
+            return reprojection_errors_list
         raise AttributeError
 
 

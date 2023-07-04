@@ -22,7 +22,7 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
     def _prepare_dataset(self):
         mapping = {}
         for index, e in enumerate(self.dataset.datasetEntries):
-            mapping.update({index: e.map2d_3d_np(self.dataset.points3D_mapped, zipped=False)})
+            mapping.update({index: e.map2d_3d(self.dataset.points3D_mapped, zipped=False, np=True)})
         return mapping
 
     def _prepare_cameras(self):

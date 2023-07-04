@@ -104,18 +104,28 @@ class Dataset:
     def compute_reprojection_errors(self):
         reprojection_errors = {}
         for index, de in enumerate(self.datasetEntries):
-            p2d, p3d = de.map2d_3d_np(self.points3D_mapped, zipped=False)
+            p2d, p3d = de.map2d_3d(self.points3D_mapped, zipped=False, np=True)
             reprojection_errors.update({
                 index: de.camera.compute_projection_errors(p2d=p2d, p3d=p3d)
             })
         return reprojection_errors
+
+    def compute_reprojection_errors_alt(self):
+        reprojection_errors = {}
+        for index, de in enumerate(self.datasetEntries):
+            p2d, p3d = de.map2d_3d(self.points3D_mapped, zipped=False, np=True)
+            reprojection_errors.update({
+                index: de.camera.compute_projection_errors_alt(p2d=p2d, p3d=p3d)
+            })
+        return reprojection_errors
+
 
     # def compute_reprojection_errors_threaded(self):
     #     reprojection_errors = {}
     #
     #     def _process_dataset_entry(index_dataset_entry, points3D_mapped):
     #         index, dataset_entry = index_dataset_entry
-    #         p2d, p3d = dataset_entry.map2d_3d_np(points3D_mapped, zipped=False)
+    #         p2d, p3d = dataset_entry.map2d_3d(points3D_mapped, zipped=False, np=True)
     #         return {
     #             index: dataset_entry.camera.compute_projection_errors(p2d=p2d, p3d=p3d)
     #         }

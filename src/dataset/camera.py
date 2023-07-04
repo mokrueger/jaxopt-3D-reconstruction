@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 from typing import Union, Tuple
 
@@ -61,15 +62,24 @@ class Camera:
         return np.array([p[0] / p[2], p[1] / p[2]])
 
     def compute_inlier_mask(self, p2d, p3d, max_error):
-        return [np.linalg.norm(p2 - self.project(p3)) <= max_error for p2, p3 in zip(p2d, p3d)]
+        return [((p2 - self.project(p3)) ** 2).sum(axis=0) <= max_error for p2, p3 in zip(p2d, p3d)]
 
     def compute_inlier_mask_mod(self, p2d, p3d):
-        errors = [np.linalg.norm(p2 - self.project(p3)) for p2, p3 in zip(p2d, p3d)]
+        errors = [((p2 - self.project(p3)) ** 2).sum(axis=0) for p2, p3 in zip(p2d, p3d)]
         max_error = np.median(errors)
-        return [np.linalg.norm(p2 - self.project(p3)) <= max_error for p2, p3 in zip(p2d, p3d)]
+        return [((p2 - self.project(p3)) ** 2).sum(axis=0) <= max_error for p2, p3 in zip(p2d, p3d)]
 
     def compute_projection_errors(self, p2d, p3d):  # TODO: this is technically duplicate code
-        return [np.linalg.norm(p2 - self.project(p3)) for p2, p3 in zip(p2d, p3d)]
+        return [((p2 - self.project(p3)) ** 2).sum(axis=0) for p2, p3 in zip(p2d, p3d)]
+
+    def compute_projection_errors_alt(self, p2d, p3d):  # TODO: this is technically duplicate code
+        p2d = np.array(p2d).transpose()
+        p3d = np.hstack([np.array(p3d), np.ones(len(p3d)).reshape(len(p3d), 1)]).transpose()
+        camera_and_intrinsics = self.camera_intrinsics.camera_intrinsics_matrix @ self.camera_pose.in_direction(
+            TransformationDirection.W2C).rotation_translation_matrix
+        reprojection = camera_and_intrinsics @ p3d
+        reprojection = reprojection[:2, ...] / reprojection[2:3, ...]
+        return ((p2d - reprojection) ** 2).sum(axis=0)
 
     @staticmethod
     def difference(camera_1: "Camera", camera_2: "Camera"):

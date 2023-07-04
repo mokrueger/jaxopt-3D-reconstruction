@@ -72,7 +72,7 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         for _, e in enumerate(self.dataset.datasetEntries):
             cam = e.camera
 
-            mapped_points = e.map2d_3d_np(self.dataset.points3D_mapped, zipped=False)
+            mapped_points = e.map2d_3d(self.dataset.points3D_mapped, zipped=False, np=True)
             p_2d, p_3d = [np.array(l) for l in mapped_points]
             p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
 

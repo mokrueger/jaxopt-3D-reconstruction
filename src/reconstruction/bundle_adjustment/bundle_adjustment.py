@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
 import numpy as np
-import optax
+
 from jax import device_put, disable_jit, jit, lax, make_jaxpr, pmap, vmap
 from jax.experimental import sparse
 from jax.profiler import save_device_memory_profile, trace

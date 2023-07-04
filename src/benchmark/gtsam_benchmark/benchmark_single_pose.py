@@ -21,7 +21,7 @@ X = symbol_shorthand.X
 def _prepare_dataset(dataset):  # TODO: Perhaps integrate into dataset
     mapping = {}
     for index, e in enumerate(dataset.datasetEntries):
-        mapping.update({index: e.map2d_3d_np(dataset.points3D_mapped, zipped=False)})
+        mapping.update({index: e.map2d_3d(dataset.points3D_mapped, zipped=False, np=True)})
     return mapping
 
 
