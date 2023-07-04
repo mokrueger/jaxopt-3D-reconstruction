@@ -194,14 +194,16 @@ if __name__ == "__main__":
     }
 
     ds = load_colmap_dataset(config["path"], config["image_path"], binary=True)
-    ds = Dataset.with_noise(ds, point2d_noise=0) if config["add_noise"] else ds
+    ds_noise = Dataset.with_noise(ds, point2d_noise=0, point3d_noise=0) if config["add_noise"] else ds
 
-    jaxopt_benchmark = JaxoptSinglePoseBenchmark(ds)
+    jaxopt_benchmark_batched = JaxoptSinglePoseBenchmark(ds_noise)
+    jaxopt_benchmark_batched.benchmark()
+    # jaxopt_benchmark = JaxoptSinglePoseBenchmark(ds_noise)
     #  total_c, total_o, total_t = jaxopt_benchmark.benchmark()
-    jaxopt_benchmark.benchmark()
+    #  jaxopt_benchmark.benchmark()
 
     initial_errors = (
-        jaxopt_benchmark.shallow_results_dataset().compute_reprojection_errors()
+        jaxopt_benchmark_batched.shallow_results_dataset().compute_reprojection_errors()
     )
     #  jaxopt_benchmark.benchmark_batch()
     print("finished")

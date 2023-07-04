@@ -6,7 +6,7 @@ import numpy as np
 from jax import device_put, jit, vmap
 from jaxopt import LevenbergMarquardt
 
-# jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", True)
 
 
 def get_reprojection_residuals_cpu(pose, points, observations, intrinsics, mask):
@@ -14,7 +14,7 @@ def get_reprojection_residuals_cpu(pose, points, observations, intrinsics, mask)
     x = np.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
-    res = ((observations - x) ** 2).sum(axis=1)
+    res = ((observations - x) ** 2).sum(axis=1) / 250000
     return np.where(mask, res, np.zeros_like(res))
 
 
@@ -47,7 +47,7 @@ def get_residuals(opt_params, points, observations, mask):
     x = jnp.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
-    res = ((observations - x) ** 2).sum(axis=1)
+    res = ((observations - x) ** 2).sum(axis=1) / 250000
     return jnp.where(mask, res, jnp.zeros_like(res))
 
 
@@ -58,7 +58,7 @@ class JaxPoseOptimizer:
 
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
-            residual_fun=get_residuals, tol=1e-15, gtol=1e-15, jit=True, solver="cholesky", maxiter=300
+            residual_fun=get_residuals, tol=1e-8, gtol=1e-8, jit=True, solver="cholesky", maxiter=10000
         )
 
         return lm, jit(vmap(lm.run, in_axes=(0, 0, 0, 0)))
