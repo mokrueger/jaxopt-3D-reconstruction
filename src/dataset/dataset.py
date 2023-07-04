@@ -4,12 +4,14 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from functools import partial
 from typing import List, Dict, Optional
+from warnings import warn
 
 from src.benchmark.multiprocesser import ListMultiProcessor
 from src.dataset import np  # For the seed and reproducibility
 from scipy.spatial.transform import Rotation
 
 from src.dataset.datasetEntry import DatasetEntry
+from src.dataset.loss_functions import LossFunction
 from src.dataset.point import Point3D, Point2D
 
 
@@ -101,7 +103,8 @@ class Dataset:
             return str(Path(self.datasetEntries[0].image_metadata.image_path).parent)
         return ""  # TODO: or raise error?
 
-    def compute_reprojection_errors(self):
+    def compute_reprojection_errors(self):  # TODO: Deprecated
+        warn("compute_reprojection_errors is deprecated")
         reprojection_errors = {}
         for index, de in enumerate(self.datasetEntries):
             p2d, p3d = de.map2d_3d(self.points3D_mapped, zipped=False, np=True)
@@ -110,15 +113,14 @@ class Dataset:
             })
         return reprojection_errors
 
-    def compute_reprojection_errors_alt(self):
+    def compute_reprojection_errors_alt(self, loss_function: LossFunction):
         reprojection_errors = {}
         for index, de in enumerate(self.datasetEntries):
             p2d, p3d = de.map2d_3d(self.points3D_mapped, zipped=False, np=True)
             reprojection_errors.update({
-                index: de.camera.compute_projection_errors_alt(p2d=p2d, p3d=p3d)
+                index: de.camera.compute_projection_errors_alt(p2d=p2d, p3d=p3d, loss_function=loss_function)
             })
         return reprojection_errors
-
 
     # def compute_reprojection_errors_threaded(self):
     #     reprojection_errors = {}

@@ -30,6 +30,7 @@ from src.dataset.dataset import Dataset
 
 #  from src.benchmark.gtsam_benchmark.benchmark_single_pose import import benchmark_gtsam_single_pose
 from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
+from src.dataset.loss_functions import LossFunction
 
 REICHSTAG_SPARSE_NOISED = os.path.join(DATASETS_PATH, "reichstag/sparse_noised")
 REICHSTAG_SPARSE = os.path.join(DATASETS_PATH, "reichstag/sparse")
@@ -47,7 +48,7 @@ def save_reprojection_error_histogram(list_of_benchmarks):
     os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
     reprojection_errors = []
     for benchmark in list_of_benchmarks:
-        reprojection_error = benchmark.reprojection_errors()
+        reprojection_error = benchmark.reprojection_errors(loss_function=LossFunction.CAUCHY_LOSS)
         reprojection_errors.append(reprojection_error)
 
     fig: plt.Figure
@@ -216,7 +217,8 @@ def benchmark_bundle_adjustment(dataset):
 
 if __name__ == "__main__":
 
-    # ds0 = load_colmap_dataset(REICHSTAG_SPARSE, REICHSTAG_IMAGES, binary=True, name="Reichstag Original")
+    ds0 = load_colmap_dataset(REICHSTAG_SPARSE, REICHSTAG_IMAGES, binary=True, name="Reichstag Original")
+    ds0.compute_reprojection_errors_alt(loss_function=LossFunction.CAUCHY_LOSS)
     # ds00 = Dataset.with_noise(ds0, point2d_noise=0, point3d_noise=0)
     # benchmark_single_pose(ds00)
     ###################################

@@ -155,6 +155,11 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
             batch_size=batch_size
         )
         optimization_time = time.perf_counter() - start
+
+        if verbose:
+            print("optimization time:", optimization_time, "s")
+            print("Loss:", state.loss, "in", state.iter_num, "iterations")
+            print("Gradient:", np.mean(np.abs(state.gradient)))
         return compilation_time, optimization_time, params, state
 
     def benchmark(self, *args, **kwargs):
@@ -185,6 +190,7 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         self._results = SinglePoseBenchmarkResults(camera_mapping=_parse_output_params(param_list, self.dataset))
         self._time = c_times, o_times, total_t
         self._single_times = list(map(lambda x: x[0] + x[1], list(zip(c_times, o_times))))
+
 
 from src.reconstruction.bundle_adjustment.pose_optimization import (
     get_reprojection_residuals_cpu,

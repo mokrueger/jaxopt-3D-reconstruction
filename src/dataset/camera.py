@@ -1,11 +1,13 @@
 import time
 from dataclasses import dataclass
 from typing import Union, Tuple
+from warnings import warn
 
 import numpy as np
 
 from src.dataset.camera_pose.camera_pose import CameraPose
 from src.dataset.camera_pose.enums_and_types import TransformationDirection
+from src.dataset.loss_functions import LossFunction
 from src.dataset.point import Point3D
 
 
@@ -70,16 +72,17 @@ class Camera:
         return [((p2 - self.project(p3)) ** 2).sum(axis=0) <= max_error for p2, p3 in zip(p2d, p3d)]
 
     def compute_projection_errors(self, p2d, p3d):  # TODO: this is technically duplicate code
+        warn("compute_reprojection_errors is deprecated")
         return [((p2 - self.project(p3)) ** 2).sum(axis=0) for p2, p3 in zip(p2d, p3d)]
 
-    def compute_projection_errors_alt(self, p2d, p3d):  # TODO: this is technically duplicate code
+    def compute_projection_errors_alt(self, p2d, p3d, loss_function):
         p2d = np.array(p2d).transpose()
         p3d = np.hstack([np.array(p3d), np.ones(len(p3d)).reshape(len(p3d), 1)]).transpose()
         camera_and_intrinsics = self.camera_intrinsics.camera_intrinsics_matrix @ self.camera_pose.in_direction(
             TransformationDirection.W2C).rotation_translation_matrix
         reprojection = camera_and_intrinsics @ p3d
         reprojection = reprojection[:2, ...] / reprojection[2:3, ...]
-        return ((p2d - reprojection) ** 2).sum(axis=0)
+        return (loss_function((p2d - reprojection) ** 2)).sum(axis=0)
 
     @staticmethod
     def difference(camera_1: "Camera", camera_2: "Camera"):

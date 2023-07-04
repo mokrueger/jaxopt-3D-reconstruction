@@ -28,8 +28,12 @@ def rot_mat_from_vec(rodrigues_vec):
     return jnp.cos(theta) * I + (1 - jnp.cos(theta)) * r_rT + jnp.sin(theta) * r_cross
 
 
+def cauchy_loss(scale=1):
+    return jit(lambda x: jnp.log(1 + x ** scale))
+
+
 @jit
-def get_residuals(opt_params, points, observations, mask):
+def get_residuals(opt_params, points, observations, mask, loss_function=cauchy_loss()):
     pose = jnp.concatenate(
         [rot_mat_from_vec(opt_params[:3]), opt_params[3:6, jnp.newaxis]], axis=1
     )
@@ -47,7 +51,7 @@ def get_residuals(opt_params, points, observations, mask):
     x = jnp.einsum("ij,hj->hi", KE, points)  # reprojected_points
     x = x[..., :2] / x[..., 2:3]  # 2:3 to prevent axis from being removed
 
-    res = ((observations - x) ** 2).sum(axis=1) / 250000
+    res = (loss_function((observations - x) ** 2)).sum(axis=1) / 250000
     return jnp.where(mask, res, jnp.zeros_like(res))
 
 
@@ -58,7 +62,7 @@ class JaxPoseOptimizer:
 
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
-            residual_fun=get_residuals, tol=1e-8, gtol=1e-8, jit=True, solver="cholesky", maxiter=10000
+            residual_fun=get_residuals, tol=1e-8, gtol=1e-8, jit=True, solver="cholesky", maxiter=100
         )
 
         return lm, jit(vmap(lm.run, in_axes=(0, 0, 0, 0)))

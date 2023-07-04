@@ -11,6 +11,7 @@ from src.benchmark.benchmark import (
     SinglePoseBenchmark,
     SinglePoseBenchmarkResults,
 )
+from src.benchmark.jaxopt_benchmark.benchmark_batched_pose import JaxoptSinglePoseBenchmarkBatched
 from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params, create_plot
 from src.config import DATASETS_PATH
 from src.dataset.camera import Camera
@@ -24,6 +25,7 @@ from src.dataset.loaders.colmap_dataset_loader.loader import (
     load_colmap_dataset,
     params_to_intrinsics,
 )
+from src.dataset.loss_functions import LossFunction
 from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
 
 
@@ -194,16 +196,20 @@ if __name__ == "__main__":
     }
 
     ds = load_colmap_dataset(config["path"], config["image_path"], binary=True)
+    gt_errors = ds.compute_reprojection_errors_alt(loss_function=LossFunction.CAUCHY_LOSS)
     ds_noise = Dataset.with_noise(ds, point2d_noise=0, point3d_noise=0) if config["add_noise"] else ds
 
-    jaxopt_benchmark_batched = JaxoptSinglePoseBenchmark(ds_noise)
+    # Note this should not belong here because its batched stuff :D
+    jaxopt_benchmark_batched = JaxoptSinglePoseBenchmarkBatched(ds_noise)
     jaxopt_benchmark_batched.benchmark()
+
+
     # jaxopt_benchmark = JaxoptSinglePoseBenchmark(ds_noise)
     #  total_c, total_o, total_t = jaxopt_benchmark.benchmark()
     #  jaxopt_benchmark.benchmark()
 
     initial_errors = (
-        jaxopt_benchmark_batched.shallow_results_dataset().compute_reprojection_errors()
+        jaxopt_benchmark_batched.shallow_results_dataset().compute_reprojection_errors_alt(loss_function=LossFunction.CAUCHY_LOSS)
     )
     #  jaxopt_benchmark.benchmark_batch()
     print("finished")

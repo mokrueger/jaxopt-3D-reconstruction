@@ -17,8 +17,8 @@ def _parse_output_params(param_list, dataset):
     # This will be "revived" if we get the values in the queue.get(), filling up the complete GPU memory again
     cameras = {}
     for index, params in enumerate(param_list):
-        if any(np.isnan(params)):  # TODO: remove this later
-            continue
+        if any(np.isnan(params)):  # TODO: adjust this later
+            raise Exception("NANANANANANANANANANANANANANANANANANANANANANANANA BATMAN (nan detected)")
         old_camera = dataset.datasetEntries[index].camera
         new_camera_pose = CameraPose(rotation=Rotation.from_rotvec(np.array(params[0:3])),
                                      translation=np.array(params[3:6]),
