@@ -10,7 +10,7 @@ import time
 import jax
 import numpy as np
 
-jax.config.update("jax_platform_name", "cpu")
+jax.config.update("jax_platform_name", "gpu")
 
 
 from src.benchmark.benchmark import Benchmark
@@ -54,7 +54,7 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         map_2d_3d_list = []
         p3d = {}
 
-        for d_entry in self.dataset.datasetEntries[:15]:
+        for d_entry in self.dataset.datasetEntries[:5]:
             cam_poses.append(d_entry.camera.camera_pose.rotation_translation_matrix)
             intrinsics.append(d_entry.camera.camera_intrinsics.camera_intrinsics_matrix)
             map_2d_3d_list.append(d_entry.map2d_3d(self.dataset.points3D_mapped))

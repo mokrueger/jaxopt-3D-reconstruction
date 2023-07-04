@@ -143,6 +143,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         if verbose:
             print("optimization time:", optimization_time, "s")
             print("Loss:", state.loss, "in", state.iter_num, "iterations")
+            print("Gradient:", np.mean(np.abs(state.gradient)))
             print(
                 "Pose error:",
                 JaxPoseOptimizer.pose_mat_to_vec(self.cam_poses[camera_index])

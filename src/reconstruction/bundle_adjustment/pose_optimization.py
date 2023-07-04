@@ -3,10 +3,10 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import device_put, jit, tree_util, vmap
+from jax import device_put, jit, vmap
 from jaxopt import LevenbergMarquardt
 
-#  jax.config.update("jax_enable_x64", True)
+# jax.config.update("jax_enable_x64", True)
 
 
 def get_reprojection_residuals_cpu(pose, points, observations, intrinsics, mask):
@@ -58,7 +58,7 @@ class JaxPoseOptimizer:
 
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
-            residual_fun=get_residuals, tol=1e-15, gtol=1e-15, jit=True, solver="inv"
+            residual_fun=get_residuals, tol=1e-15, gtol=1e-15, jit=True, maxiter=300
         )
 
         return lm, jit(vmap(lm.run, in_axes=(0, 0, 0, 0)))

@@ -1,15 +1,18 @@
 from enum import Enum
 
+import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
 import numpy as np
 import optax
-from jax import device_put, disable_jit, jit, lax, make_jaxpr, vmap
+from jax import device_put, disable_jit, jit, lax, make_jaxpr, pmap, vmap
 from jax.experimental import sparse
 from jax.profiler import save_device_memory_profile, trace
 from jax.tree_util import register_pytree_node_class
 from jaxopt import LevenbergMarquardt
 from memory_profiler import profile
+
+# jax.config.update("jax_enable_x64", False)
 
 
 @jit
@@ -43,20 +46,49 @@ def parse_cam_poses(cam_vec):
 
 
 @jit
+def reproject_point(KE, point_2d, p3d_index, points_3d):
+    point_2d_projected = KE[:, :3] @ points_3d[p3d_index] + KE[:, 3]
+    point_2d_projected = point_2d_projected[:2] / point_2d_projected[2:3]
+    return ((point_2d_projected - point_2d) ** 2).sum()
+
+
+@jit
+def reproject_point_scan(KE, points_2d, p3d_indices, points_3d):
+    return lax.scan(
+        lambda _, x: (_, reproject_point(KE, *x, points_3d)),
+        0,
+        (points_2d, p3d_indices),
+    )[1]
+
+
+@jit
 def reproject_points(KE, points_2d, p3d_indices, points_3d):
     points_3d_selected = points_3d.take(p3d_indices, axis=0)
-    point_2d_projected = jnp.einsum("ij,bj->bi", KE[:, :3], points_3d_selected)
-    point_2d_projected = point_2d_projected + KE[:, 3]
-    point_2d_projected = point_2d_projected[..., :2] / point_2d_projected[..., 2:3]
-    return ((point_2d_projected - points_2d) ** 2).sum(axis=1)
+    points_2d_projected = jnp.einsum("ij,bj->bi", KE[:, :3], points_3d_selected)
+    points_2d_projected = points_2d_projected + KE[:, 3]
+    points_2d_projected = points_2d_projected[..., :2] / points_2d_projected[..., 2:3]
+    return ((points_2d_projected - points_2d) ** 2).sum(axis=1)
 
 
-reproject_points_vmap = jit(vmap(reproject_points, in_axes=[0, 0, 0, None]))
+def rp_scan(KE, points_2d_all, p3d_indices_all, points_3d):
+    return lax.scan(
+        lambda _, x: (_, reproject_points(*x, points_3d).sum()),
+        None,
+        (KE, points_2d_all, p3d_indices_all),
+    )[1]
+
+
+reproject_point_vmap = jit(vmap(reproject_point, in_axes=(None, 0, 0, None)))
+rp_vmap = jit(vmap(reproject_points, in_axes=(0, 0, 0, None)))
+rp_vmap_full = jit(vmap(reproject_point_vmap, in_axes=(0, 0, 0, None)))
+rp_vmap_scan = jit(vmap(reproject_point_scan, in_axes=(0, 0, 0, None)))
 
 
 class OptimizationMode(Enum):
-    VMAPPED_FULL = 1
-    LAX_SCAN = 2
+    VMAPPED = 1  # mid
+    VMAPPED_FULL = 2  # fastest so far
+    VMAPPED_LAX_SCAN = 3  # unbelievably slow
+    LAX_SCAN = 4  # slow, low mem?
 
 
 @register_pytree_node_class
@@ -65,7 +97,7 @@ class BundleAdjustment:
         self,
         cam_num,
         batch_size: int = 8,
-        opt_mode: OptimizationMode = OptimizationMode.VMAPPED_FULL,
+        opt_mode: OptimizationMode = OptimizationMode.VMAPPED,
     ):
         self.batch_size = batch_size
         self.cam_num = cam_num
@@ -96,21 +128,42 @@ class BundleAdjustment:
         )
         points_3d = opt_params[intr_end_index:].reshape((-1, 3))
 
-        ke = jnp.einsum("bij,bjk->bik", intrinsics, poses)
+        KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
 
         print(self.cam_num, points_3d.shape, points_2d_all.shape, p3d_indices_all.shape)
 
+        if self.opt_mode == OptimizationMode.VMAPPED:
+            error = rp_vmap(KE, points_2d_all, p3d_indices_all, points_3d)
+            return error.sum(axis=1)
         if self.opt_mode == OptimizationMode.VMAPPED_FULL:
-            error = reproject_points_vmap(ke, points_2d_all, p3d_indices_all, points_3d)
+            error = rp_vmap_full(KE, points_2d_all, p3d_indices_all, points_3d)
+            return error.sum(axis=1)
+        if self.opt_mode == OptimizationMode.VMAPPED_LAX_SCAN:
+            error = rp_vmap_scan(KE, points_2d_all, p3d_indices_all, points_3d)
             return error.sum(axis=1)
         elif self.opt_mode == OptimizationMode.LAX_SCAN:
-            _, residuals = lax.scan(
-                lambda _, x: (_, reproject_points(*x, points_3d).sum()),
-                None,
-                (ke, points_2d_all, p3d_indices_all),
-                length=self.cam_num,
-            )
-            return residuals
+            return rp_scan(KE, points_2d_all, p3d_indices_all, points_3d)
+
+
+# @jax.custom_vjp
+# def clip_gradient(lo, hi, x):
+#     return x  # identity function
+
+
+# def clip_gradient_fwd(lo, hi, x):
+#     return x, (lo, hi)  # save bounds as residuals
+
+
+# def clip_gradient_bwd(res, g):
+#     lo, hi = res
+#     return (
+#         None,
+#         None,
+#         jnp.clip(g, lo, hi),
+#     )  # use None to indicate zero cotangents for lo and hi
+
+
+# clip_gradient.defvjp(clip_gradient_fwd, clip_gradient_bwd)
 
 
 class JaxBundleAdjustment:
@@ -124,24 +177,11 @@ class JaxBundleAdjustment:
         self.optimizer, self.solver = self.create_optimizer()
 
     def create_optimizer(self):
-        # opt = OptaxSolver(
-        #     self.ba.get_residuals,
-        #     opt=optax.adamw(self.learning_rate),
-        #     tol=1e-15,
-        #     jit=True,
-        #     maxiter=1000,
-        # )
-
-        def f_solver(matvec, b, ridge=None, init=None, **kwargs):
-            x, _ = jscipy.sparse.linalg.cg(matvec, b, x0=init)
-            return x
-
         opt = LevenbergMarquardt(
             residual_fun=sparse.sparsify(self.ba.get_residuals),
             tol=1e-15,
-            gtol=1e-15,
+            # gtol=1e-15,
             jit=True,
-            solver=f_solver,
         )
 
         return opt, jit(opt.run)
@@ -173,7 +213,6 @@ class JaxBundleAdjustment:
         params, state = self.solver(opt_params, points_2d_all, p3d_indices_all)
         params = params.block_until_ready()
         return params, state
-        # save_device_memory_profile("memory.prof")
 
     def compile(self, points_num, batch_size=8):
         # 6 for pose, 5 for intrinsics
