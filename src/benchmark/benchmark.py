@@ -1,6 +1,7 @@
 import copy
 import multiprocessing
 import os
+import pickle
 import time
 
 from matplotlib import pyplot as plt
@@ -23,6 +24,9 @@ class Benchmark(ABC):
     NAME = "Benchmark"
     FRAMEWORK = "Framework"
 
+    def __init__(self, dataset: Dataset):
+        self.dataset = dataset
+
     @abstractmethod
     def benchmark(self, *args, **kwargs):
         pass
@@ -37,6 +41,25 @@ class Benchmark(ABC):
     def time(self):
         raise NotImplementedError
 
+    def export_pickle(self, full_path_to_folder, filename=None) -> str:
+        os.makedirs(full_path_to_folder, exist_ok=True)
+        if not filename:
+            filename = self.__class__.__name__ + f"_{self.dataset.name.replace(' ', '_')}" + ".pkl"
+        full_filename = os.path.abspath(os.path.join(full_path_to_folder, filename))
+        with open(full_filename, 'wb') as f:
+            pickle.dump(self, f)
+        return full_filename
+
+    @staticmethod
+    def load_pickle(path_to_pickle_obj):
+        with open(path_to_pickle_obj, "rb") as f:
+            return pickle.load(f)
+
+    @staticmethod
+    def load_pickle_folder(path_to_pickle_folder):
+        files = [os.path.join(path_to_pickle_folder, f) for f in os.listdir(path_to_pickle_folder)]
+        return list(map(Benchmark.load_pickle, files))
+
 
 @dataclass
 class SinglePoseBenchmarkResults:
@@ -47,10 +70,11 @@ class SinglePoseBenchmark(Benchmark, ABC):
     NAME = "Single Pose Benchmark"
 
     def __init__(self, dataset: Dataset):
-        self.dataset = dataset
+        super().__init__(dataset)
         self._results = None
         self._time = None
         self._single_times = None
+        self._iterations = None
 
     @property
     def results(self) -> SinglePoseBenchmarkResults:
@@ -70,6 +94,12 @@ class SinglePoseBenchmark(Benchmark, ABC):
             return self._single_times
         raise AttributeError
 
+    @property
+    def iterations(self):
+        if self._iterations:
+            return self._iterations
+        raise AttributeError
+
     def subprocess_benchmark(self, benchmark_function_name="benchmark", *args, **kwargs, ):
         """
         Args:
@@ -86,6 +116,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
             queue.put(subprocess_benchmark_class.results)
             queue.put(subprocess_benchmark_class.time)
             queue.put(subprocess_benchmark_class.single_times)
+            queue.put(subprocess_benchmark_class.iterations)
             print("Process exiting")
             exit(0)
 
@@ -101,7 +132,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
         p.start()
         item_count = 0
         items = []
-        while item_count != 3:  # Join does not work when putting large objects in queue.
+        while item_count != 4:  # We do this because join does not work when putting large objects in queue.
             if q.empty():
                 time.sleep(5)
             else:
@@ -115,6 +146,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
         self._results = copy.deepcopy(items[0])
         self._time = copy.deepcopy(items[1])
         self._single_times = copy.deepcopy(items[2])
+        self._iterations = copy.deepcopy(items[3])
 
     def shallow_results_dataset(self):  # Note: everything (excluding cameras) points to the original dataset(!!)
         if self._results:
@@ -175,7 +207,7 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
     NAME = "Bundle Adjustment Benchmark"
 
     def __init__(self, dataset: Dataset):
-        self.dataset = dataset
+        super().__init__(dataset)
         self._results = None
         self._time = None
 

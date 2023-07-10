@@ -61,8 +61,7 @@ class JaxPoseOptimizer:
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
             residual_fun=self.po.get_residuals,
-            tol=1e-8,
-            gtol=1e-8,
+            tol=1e-6,
             jit=True,
             solver="cholesky",
             maxiter=100,

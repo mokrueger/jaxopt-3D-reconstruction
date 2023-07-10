@@ -1,19 +1,36 @@
+import collections
 import os
+import re
 import time
-import timeit
-from functools import partial
 
-import pycolmap
 import numpy as np
-from pycolmap import AbsolutePoseRefinementOptions, RANSACOptions
+import pycolmap
+from pycolmap import AbsolutePoseRefinementOptions
 
 from src.benchmark.benchmark import SinglePoseBenchmark, SinglePoseBenchmarkResults
+from src.benchmark.colmap_benchmark.utils import OutputGrabber
 from src.config import DATASETS_PATH
 from src.dataset.camera import Camera
-from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
-from src.dataset.dataset import Dataset
-from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.dataset.camera_pose.camera_pose import CameraPose
+from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
+
+PoseRefinementReport = collections.namedtuple(  # TODO: maybe just a dataclass
+    "PoseRefinementReport",
+    ["residuals", "parameters", "iterations", "time", "initial_cost", "final_cost", "termination"]
+)
+
+
+def _process_std_out(std_out):
+    return PoseRefinementReport(
+        residuals=int(re.search(r".*Residuals : (\d+)\n", std_out).group(1)),
+        parameters=int(re.search(r".*Parameters : (\d+)\n", std_out).group(1)),
+        iterations=int(re.search(r".*Iterations : (\d+)\n", std_out).group(1)),
+        time=float(re.search(r".*Time : (\d+\.\d+) \[s]", std_out).group(1)),
+        initial_cost=float(re.search(r".*Initial cost : (\d+\.\d+) \[px]", std_out).group(1)),
+        final_cost=float(re.search(r".*Final cost : (\d+\.\d+) \[px]", std_out).group(1)),
+        termination=re.search(r".*Termination : (Convergence|No convergence)\n", std_out).group(1)
+    )
 
 
 class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
@@ -43,12 +60,13 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
         return mapping
 
     def benchmark_absolute_pose(self, tvecs, qvecs, p2d_list, p3d_list, inlier_mask_list, camera_list,
-                                absolute_pose_refinement_options):
+                                absolute_pose_refinement_options, verbose):
         assert len(p2d_list) == len(p3d_list) == len(camera_list)
-        times = []
         outputs = []
+        reports = []
         for index in range(len(p2d_list)):
-            start = time.perf_counter()
+            output_grabber = OutputGrabber()
+            output_grabber.start()
             o = pycolmap.pose_refinement(
                 tvec=tvecs[index],
                 qvec=qvecs[index],
@@ -58,9 +76,12 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
                 camera=camera_list[index],
                 refinement_options=absolute_pose_refinement_options
             )
-            times.append(time.perf_counter() - start)
+            output_grabber.stop()
+            reports.append(_process_std_out(output_grabber.capturedtext))
+            if verbose:
+                print(output_grabber.capturedtext)
             outputs.append(o)
-        return outputs, times
+        return outputs, [r.time for r in reports], reports
 
     def validate_output(self, output, camera_poses_list, validation_error_position, validation_error_rotation):
         output_camera_poses = list(map(  # TODO: Remove this function
@@ -105,9 +126,7 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
             output)
         )
 
-    def benchmark(self, add_noise=True, refine_focal_length=True,
-                  validate_result=True, validation_error_position=5e-02,  # TODO: Remove validation stuff
-                  validation_error_rotation=1e-02):
+    def benchmark(self, verbose=False):
 
         # TODO: Different ids could be a problem, perhaps switch to datasetEntry.identifier-based mapping
         mapping_2d_3d_by_id = self._prepare_dataset()
@@ -115,9 +134,9 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
         mapping_colmap_cameras_by_id = self._prepare_colmap_cameras(mapping_cameras_by_id)
 
         absolute_pose_refinement_options = AbsolutePoseRefinementOptions()
-        absolute_pose_refinement_options.refine_extra_params = refine_focal_length
-        absolute_pose_refinement_options.refine_focal_length = refine_focal_length
-        absolute_pose_refinement_options.print_summary = False  # Set to false for now
+        absolute_pose_refinement_options.refine_extra_params = True
+        absolute_pose_refinement_options.refine_focal_length = True
+        absolute_pose_refinement_options.print_summary = True  # Set to false for now
 
         """input preparation"""
         tvecs, qvecs, p2d_list, p3d_list, inlier_mask_list, colmap_camera_list, camera_poses_list = [], [], [], [], [], [], []
@@ -138,9 +157,11 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
 
         """benchmark"""
         elapsed_time = 0.0
-        output, times = self.benchmark_absolute_pose(tvecs, qvecs, p2d_list, p3d_list, inlier_mask_list,
-                                                     colmap_camera_list, absolute_pose_refinement_options)
+        output, times, reports = self.benchmark_absolute_pose(tvecs, qvecs, p2d_list, p3d_list, inlier_mask_list,
+                                                              colmap_camera_list, absolute_pose_refinement_options,
+                                                              verbose=verbose)
         elapsed_time += sum(times)
+        iterations = [r.iterations for r in reports]
 
         """parsing output"""
         parsed_camera_pose = self._parse_colmap_output(output)
@@ -163,6 +184,7 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
         self._results = SinglePoseBenchmarkResults(camera_mapping=camera_mapping)
         self._time = elapsed_time
         self._single_times = times
+        self._iterations = iterations
 
 
 if __name__ == "__main__":

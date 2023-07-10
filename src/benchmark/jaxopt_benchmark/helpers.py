@@ -34,9 +34,9 @@ def _parse_output_params(param_list, dataset):
         new_intrinsics = params_to_intrinsics(
             fx=float(params[6]),
             fy=float(params[7]),
-            cx=float(params[8]),
-            cy=float(params[9]),
-            s=float(params[10]),
+            cx=float(params[8]) if len(params) == 11 else 0.0,  # TODO: Fix this
+            cy=float(params[9]) if len(params) == 11 else 0.0,
+            s=float(params[10]) if len(params) == 11 else 0.0,
         )
         cameras.update(
             {
@@ -52,16 +52,16 @@ def _parse_output_params(param_list, dataset):
 
 
 def plot_costs(
-    ax,
-    pose0,
-    pose1,
-    points,
-    observations,
-    intrinsics,
-    eps=0.1,
-    n=1000,
-    label0="",
-    label1="",
+        ax,
+        pose0,
+        pose1,
+        points,
+        observations,
+        intrinsics,
+        eps=0.1,
+        n=1000,
+        label0="",
+        label1="",
 ):
     """Plot cost function when interpolating between pose0 and pose1"""
     taus = np.linspace(-eps, 1 + eps, n)
@@ -75,7 +75,7 @@ def plot_costs(
     objective_values = []
     for tau in taus:
         p_int = Se3(
-            (p0.q ** (1 - tau) * p1.q**tau).R,
+            (p0.q ** (1 - tau) * p1.q ** tau).R,
             p0.t * (1 - tau) + p1.t * tau,
         )
 

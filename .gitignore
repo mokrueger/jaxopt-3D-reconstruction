@@ -163,3 +163,4 @@ cython_debug/
 dataset/
 src/benchmark/evaluation
 datasets/*
+benchmark_results/*/*/*.pkl

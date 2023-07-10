@@ -1,10 +1,5 @@
-import sys
-
-src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction"
-if src_path not in sys.path:
-    sys.path.append(src_path)
-
 import os
+import sys
 import time
 from datetime import datetime
 
@@ -38,7 +33,7 @@ from src.reconstruction.bundle_adjustment.utils import pose_mat_to_vec, to_gpu
 
 
 class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
-    FRAMEWORK = "JAX"
+    FRAMEWORK = "JAX Single"
     NAME = "Single Pose Benchmark"
 
     def __init__(self, dataset: Dataset):
@@ -108,7 +103,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
 
         return cam_poses, intrinsics, points_3d, points_2d, avg_cam_width
 
-    def compile(self, index):
+    def compile(self, index):  # TODO: Discontinue this.
         self.optimizer.compile(self.initial_point_sizes[index], batch_size=1)
 
     def optimize(
@@ -130,12 +125,12 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         if verbose:
             print("=== compilation ===")
         start = time.perf_counter()
-        self.compile(camera_index)
-        compilation_time = time.perf_counter() - start
-
-        if verbose:
-            print("compilation time:", compilation_time, "s")
-            print("=== optimization ===")
+        self.optimize(
+            index=camera_index,
+            initial_pose=self.cam_poses_gpu[camera_index],
+            initial_intrinsics=initial_intrinsics,
+        )
+        initial_time = time.perf_counter() - start
 
         start = time.perf_counter()
         params, state = self.optimize(
@@ -144,10 +139,13 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             initial_intrinsics=initial_intrinsics,
         )
         optimization_time = time.perf_counter() - start
-
+        compilation_time = max(0.0, initial_time - optimization_time)
         params = params[0]  # single batch
 
         if verbose:
+            print("=== compilation ===")
+            print("compilation time:", compilation_time, "s")
+            print("=== optimization ===")
             print("optimization time:", optimization_time, "s")
             print("Loss:", state.loss, "in", state.iter_num, "iterations")
             print("Gradient:", np.mean(np.abs(state.gradient)))
@@ -174,7 +172,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             ) = self.optimize_single_pose(i, verbose=verbose)
             c_times.append(compilation_time),
             o_times.append(optimization_time)
-            param_list += list(params)
+            param_list.append(params)
             state_list += state
 
         total_c = sum(c_times)
@@ -223,7 +221,7 @@ if __name__ == "__main__":
     jaxopt_benchmark.benchmark()
 
     initial_errors = (
-        jaxopt_benchmark.shallow_results_dataset().compute_reprojection_errors()
+        jaxopt_benchmark.shallow_results_dataset().compute_reprojection_errors_alt(loss_function=LossFunction.CAUCHY_LOSS)
     )
     #  jaxopt_benchmark.benchmark_batch()
     print("finished")
