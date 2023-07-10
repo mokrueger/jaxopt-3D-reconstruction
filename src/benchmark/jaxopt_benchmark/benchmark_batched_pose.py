@@ -1,24 +1,25 @@
-import os
 import sys
-import time
-from datetime import datetime
 
 src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction/"
 if src_path not in sys.path:
     sys.path.append(src_path)
 
+import os
+import time
+from datetime import datetime
+
 import numpy as np
 
-from src.benchmark.benchmark import (
-    Benchmark,
-    SinglePoseBenchmark,
-    SinglePoseBenchmarkResults,
-)
+from src.benchmark.benchmark import SinglePoseBenchmark, SinglePoseBenchmarkResults
 from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params
 from src.dataset.dataset import Dataset
 from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
+from src.reconstruction.bundle_adjustment.loss import LossFunction
 from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
-from src.reconstruction.bundle_adjustment.utils import get_reprojection_residuals_cpu
+from src.reconstruction.bundle_adjustment.utils import (
+    get_reprojection_residuals_cpu,
+    to_gpu,
+)
 
 
 class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
@@ -27,56 +28,46 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
 
     def __init__(self, dataset: Dataset):
         super().__init__(dataset)
-        (
-            self.optimizer,
-            self.cam_poses,
-            self.intrinsics,
-            self.points,
-            self.observations,
-            self.initial_point_sizes,
-            self.points_num,
-            self.masks,
-            self.cam_poses_gpu,
-            self.intrinsics_gpu,
-            self.points_gpu,
-            self.observations_gpu,
-            self.masks_gpu,
-        ) = (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        self.optimizer = None
+        self.cam_poses = None
+        self.intrinsics = None
+        self.points = None
+        self.observations = None
+        self.initial_point_sizes = None
+        self.points_num = None
+        self.masks = None
+        self.cam_poses_gpu = None
+        self.intrinsics_gpu = None
+        self.points_gpu = None
+        self.observations_gpu = None
+        self.masks_gpu = None
 
     def setup(self):
-        self.optimizer = JaxPoseOptimizer()
-
         (
             self.cam_poses,
             self.intrinsics,
             self.points,
             self.observations,
+            self.avg_cam_width,
         ) = self._prepare_dataset()
+
+        self.optimizer = JaxPoseOptimizer(
+            self.avg_cam_width, loss_fn=LossFunction.CAUCHY_LOSS
+        )
 
         self.initial_point_sizes = [len(p) for p in self.points]
         self.points_num = max(self.points, key=lambda x: x.shape[0]).shape[0]
 
+        self.cam_poses_gpu = to_gpu(self.cam_poses)
+        self.intrinsics_gpu = to_gpu(self.intrinsics)
+
         self.masks = self._pad_points_and_create_masks()
 
-        self.cam_poses_gpu = JaxPoseOptimizer.to_gpu(self.cam_poses)
-        self.intrinsics_gpu = JaxPoseOptimizer.to_gpu(self.intrinsics)
-        self.points_gpu = JaxPoseOptimizer.to_gpu(self.points)
-        self.observations_gpu = JaxPoseOptimizer.to_gpu(self.observations)
-        self.masks_gpu = JaxPoseOptimizer.to_gpu(self.masks)
+        self.cam_poses_gpu = to_gpu(self.cam_poses)
+        self.intrinsics_gpu = to_gpu(self.intrinsics)
+        self.points_gpu = to_gpu(self.points)
+        self.observations_gpu = to_gpu(self.observations)
+        self.masks_gpu = to_gpu(self.masks)
 
     def __len__(self):
         return len(self.cam_poses)
@@ -87,14 +78,16 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         points_3d = []
         points_2d = []
 
+        avg_cam_width = 0
+
         for _, e in enumerate(self.dataset.datasetEntries):
             cam = e.camera
+            avg_cam_width += cam.width
 
             mapped_points = e.map2d_3d(
                 self.dataset.points3D_mapped, zipped=False, np=True
             )
             p_2d, p_3d = [np.array(l) for l in mapped_points]
-            p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
 
             points_2d.append(p_2d)
             points_3d.append(p_3d)
@@ -102,10 +95,12 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
             cam_poses.append(cam.camera_pose.rotation_translation_matrix)
             intrinsics.append(cam.camera_intrinsics.camera_intrinsics_matrix)
 
+        avg_cam_width /= len(self.dataset.datasetEntries)
+
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
 
-        return cam_poses, intrinsics, points_3d, points_2d
+        return cam_poses, intrinsics, points_3d, points_2d, avg_cam_width
 
     def _pad_points_and_create_masks(self):
         masks = []

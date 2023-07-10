@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 
 
-class LossFunction(Enum):
+class JaxLossFunction(Enum):
     L2 = 1
     CAUCHY = 2
 

@@ -6,33 +6,16 @@ if src_path not in sys.path:
 
 import os
 import time
-from datetime import datetime
 
 import numpy as np
-from scipy.spatial.transform import Rotation
 
-from src.benchmark.benchmark import (
-    Benchmark,
-    SinglePoseBenchmark,
-    SinglePoseBenchmarkResults,
-)
-from src.benchmark.jaxopt_benchmark.benchmark_batched_pose import (
-    JaxoptSinglePoseBenchmarkBatched,
-)
-from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params, create_plot
+from src.benchmark.benchmark import SinglePoseBenchmark, SinglePoseBenchmarkResults
+from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params
 from src.config import DATASETS_PATH
-from src.dataset.camera import Camera
-from src.dataset.camera_pose.camera_pose import CameraPose
-from src.dataset.camera_pose.enums_and_types import (
-    CoordinateSystem,
-    TransformationDirection,
-)
 from src.dataset.dataset import Dataset
-from src.dataset.loaders.colmap_dataset_loader.loader import (
-    load_colmap_dataset,
-    params_to_intrinsics,
-)
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.dataset.loss_functions import LossFunction
+from src.reconstruction.bundle_adjustment.loss import JaxLossFunction
 from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
 from src.reconstruction.bundle_adjustment.utils import pose_mat_to_vec, to_gpu
 
@@ -43,17 +26,15 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
 
     def __init__(self, dataset: Dataset):
         super().__init__(dataset)
-        (
-            self.optimizer,
-            self.cam_poses,
-            self.intrinsics,
-            self.points,
-            self.observations,
-            self.initial_point_sizes,
-            self.points_num,
-            self.cam_poses_gpu,
-            self.intrinsics_gpu,
-        ) = (None, None, None, None, None, None, None, None, None)
+        self.optimizer = None
+        self.cam_poses = None
+        self.intrinsics = None
+        self.points = None
+        self.observations = None
+        self.initial_point_sizes = None
+        self.points_num = None
+        self.cam_poses_gpu = None
+        self.intrinsics_gpu = None
 
     def setup(self):
         (
@@ -65,7 +46,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         ) = self._prepare_dataset()
 
         self.optimizer = JaxPoseOptimizer(
-            self.avg_cam_width, loss_fn=LossFunction.CAUCHY_LOSS
+            self.avg_cam_width, loss_fn=JaxLossFunction.CAUCHY
         )
 
         self.initial_point_sizes = [len(p) for p in self.points]
@@ -93,7 +74,6 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
                 self.dataset.points3D_mapped, zipped=False, np=True
             )
             p_2d, p_3d = [np.array(l) for l in mapped_points]
-            # p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
 
             points_2d.append(p_2d)
             points_3d.append(p_3d)
@@ -109,17 +89,16 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         return cam_poses, intrinsics, points_3d, points_2d, avg_cam_width
 
     def compile(self, index):
-        self.optimizer.compile(self.initial_point_sizes[index], batch_size=1)
+        self.optimizer.compile(self.initial_point_sizes[index])
 
     def optimize(
         self, index: int, initial_pose: np.array, initial_intrinsics: np.array
     ):
         return self.optimizer.optimize(
-            np.expand_dims(initial_pose, 0),
-            np.expand_dims(initial_intrinsics, 0),
-            to_gpu(np.expand_dims(self.points[index], 0)),
-            to_gpu(np.expand_dims(self.observations[index], 0)),
-            to_gpu(np.ones((1, self.points[index].shape[0]), dtype=float)),
+            initial_pose,
+            initial_intrinsics,
+            to_gpu(self.points[index]),
+            to_gpu(self.observations[index]),
         )
 
     def optimize_single_pose(self, camera_index, verbose):
@@ -144,8 +123,6 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             initial_intrinsics=initial_intrinsics,
         )
         optimization_time = time.perf_counter() - start
-
-        params = params[0]  # single batch
 
         if verbose:
             print("optimization time:", optimization_time, "s")
@@ -191,11 +168,6 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
 
 
 if __name__ == "__main__":
-    #
-    # configuration
-    #
-
-    #  ds_path = os.path.join(src_path, "dataset", "reichstag", "dense")
     ds_path = os.path.join(DATASETS_PATH, "reichstag/")
 
     config = {
@@ -213,57 +185,10 @@ if __name__ == "__main__":
         if config["add_noise"]
         else ds
     )
-
-    # # Note this should not belong here because its batched stuff :D
-    # jaxopt_benchmark_batched = JaxoptSinglePoseBenchmarkBatched(ds_noise)
-    # jaxopt_benchmark_batched.benchmark()
-
     jaxopt_benchmark = JaxoptSinglePoseBenchmark(ds)
-    #  total_c, total_o, total_t = jaxopt_benchmark.benchmark()
     jaxopt_benchmark.benchmark()
 
     initial_errors = (
         jaxopt_benchmark.shallow_results_dataset().compute_reprojection_errors()
     )
-    #  jaxopt_benchmark.benchmark_batch()
     print("finished")
-
-    # create_plot(
-    #     camera_pose0=jaxopt_benchmark.cam_poses[camera_index],
-    #     camera_pose1=np.array(params[:6]),
-    #     points3D=jaxopt_benchmark.points[camera_index],
-    #     points2D=jaxopt_benchmark.observations[camera_index],
-    #     intrinsics=jaxopt_benchmark.intrinsics[camera_index]
-    # )
-
-    """ Old code from kutay"""
-    # plt.rcParams.update({"font.size": 14})
-    # fig, ax1 = plt.subplots(1, 1, figsize=(12, 8), dpi=400)
-    # ax2 = ax1.twinx()
-    #
-    # p_sizes, ts = zip(*sorted(zip(jaxopt_benchmark.initial_point_sizes, times)))
-    #
-    # p_num = ax1.bar(
-    #     np.arange(cam_num),
-    #     p_sizes,
-    #     edgecolor="green",
-    #     width=1.0,
-    #     color="black",
-    #     label="number of points",
-    # )
-    # opt_time = ax2.bar(
-    #     np.arange(cam_num),
-    #     ts,
-    #     width=0.5,
-    #     color="r",
-    #     label="optimization time",
-    # )
-    #
-    # ax1.set_xlabel("camera configuration")
-    # ax1.set_ylabel(p_num.get_label(), color="g")
-    # ax2.set_ylabel(opt_time.get_label() + " (s)", color="r")
-    # ax1.legend([p_num, opt_time], [p_num.get_label(), opt_time.get_label()])
-    # date_format = r"%m%d_%H%M%S"
-    # fig.savefig(
-    #     f"figures/test_jaxopt_single_{datetime.now().strftime(date_format)}.png"
-    # )
