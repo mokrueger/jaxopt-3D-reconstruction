@@ -1,5 +1,10 @@
-import os
 import sys
+
+src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction"
+if src_path not in sys.path:
+    sys.path.append(src_path)
+
+import os
 import time
 from datetime import datetime
 
@@ -11,7 +16,9 @@ from src.benchmark.benchmark import (
     SinglePoseBenchmark,
     SinglePoseBenchmarkResults,
 )
-from src.benchmark.jaxopt_benchmark.benchmark_batched_pose import JaxoptSinglePoseBenchmarkBatched
+from src.benchmark.jaxopt_benchmark.benchmark_batched_pose import (
+    JaxoptSinglePoseBenchmarkBatched,
+)
 from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params, create_plot
 from src.config import DATASETS_PATH
 from src.dataset.camera import Camera
@@ -27,6 +34,7 @@ from src.dataset.loaders.colmap_dataset_loader.loader import (
 )
 from src.dataset.loss_functions import LossFunction
 from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
+from src.reconstruction.bundle_adjustment.utils import pose_mat_to_vec, to_gpu
 
 
 class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
@@ -48,20 +56,23 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         ) = (None, None, None, None, None, None, None, None, None)
 
     def setup(self):
-        self.optimizer = JaxPoseOptimizer()
-
         (
             self.cam_poses,
             self.intrinsics,
             self.points,
             self.observations,
+            self.avg_cam_width,
         ) = self._prepare_dataset()
+
+        self.optimizer = JaxPoseOptimizer(
+            self.avg_cam_width, loss_fn=LossFunction.CAUCHY_LOSS
+        )
 
         self.initial_point_sizes = [len(p) for p in self.points]
         self.points_num = max(self.points, key=lambda x: x.shape[0]).shape[0]
 
-        self.cam_poses_gpu = JaxPoseOptimizer.to_gpu(self.cam_poses)
-        self.intrinsics_gpu = JaxPoseOptimizer.to_gpu(self.intrinsics)
+        self.cam_poses_gpu = to_gpu(self.cam_poses)
+        self.intrinsics_gpu = to_gpu(self.intrinsics)
 
     def __len__(self):
         return len(self.cam_poses)
@@ -72,12 +83,17 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         points_3d = []
         points_2d = []
 
+        avg_cam_width = 0
+
         for _, e in enumerate(self.dataset.datasetEntries):
             cam = e.camera
+            avg_cam_width += cam.width
 
-            mapped_points = e.map2d_3d(self.dataset.points3D_mapped, zipped=False, np=True)
+            mapped_points = e.map2d_3d(
+                self.dataset.points3D_mapped, zipped=False, np=True
+            )
             p_2d, p_3d = [np.array(l) for l in mapped_points]
-            p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
+            # p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
 
             points_2d.append(p_2d)
             points_3d.append(p_3d)
@@ -85,37 +101,31 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             cam_poses.append(cam.camera_pose.rotation_translation_matrix)
             intrinsics.append(cam.camera_intrinsics.camera_intrinsics_matrix)
 
+        avg_cam_width /= len(self.dataset.datasetEntries)
+
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
 
-        return cam_poses, intrinsics, points_3d, points_2d
+        return cam_poses, intrinsics, points_3d, points_2d, avg_cam_width
 
     def compile(self, index):
         self.optimizer.compile(self.initial_point_sizes[index], batch_size=1)
 
     def optimize(
-            self, index: int, initial_pose: np.array, initial_intrinsics: np.array
+        self, index: int, initial_pose: np.array, initial_intrinsics: np.array
     ):
         return self.optimizer.optimize(
             np.expand_dims(initial_pose, 0),
             np.expand_dims(initial_intrinsics, 0),
-            JaxPoseOptimizer.to_gpu(np.expand_dims(self.points[index], 0)),
-            JaxPoseOptimizer.to_gpu(np.expand_dims(self.observations[index], 0)),
-            JaxPoseOptimizer.to_gpu(
-                np.ones((1, self.points[index].shape[0]), dtype=bool)
-            ),
+            to_gpu(np.expand_dims(self.points[index], 0)),
+            to_gpu(np.expand_dims(self.observations[index], 0)),
+            to_gpu(np.ones((1, self.points[index].shape[0]), dtype=float)),
         )
 
     def optimize_single_pose(self, camera_index, verbose):
         # fx fy cx cy skew
         intrinsics = self.intrinsics[camera_index]
-        initial_intrinsics = [
-            intrinsics[0, 0],
-            intrinsics[1, 1],
-            intrinsics[0, 2],
-            intrinsics[1, 2],
-            intrinsics[0, 1],
-        ]
+        initial_intrinsics = [intrinsics[0, 0], intrinsics[1, 1]]
 
         if verbose:
             print("=== compilation ===")
@@ -143,8 +153,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             print("Gradient:", np.mean(np.abs(state.gradient)))
             print(
                 "Pose error:",
-                JaxPoseOptimizer.pose_mat_to_vec(self.cam_poses[camera_index])
-                - np.array(params[:6]),
+                pose_mat_to_vec(self.cam_poses[camera_index]) - np.array(params[:6]),
             )
             print(
                 "Intrinsics error:",
@@ -196,20 +205,25 @@ if __name__ == "__main__":
     }
 
     ds = load_colmap_dataset(config["path"], config["image_path"], binary=True)
-    gt_errors = ds.compute_reprojection_errors_alt(loss_function=LossFunction.CAUCHY_LOSS)
-    ds_noise = Dataset.with_noise(ds, point2d_noise=0, point3d_noise=0) if config["add_noise"] else ds
+    gt_errors = ds.compute_reprojection_errors_alt(
+        loss_function=LossFunction.CAUCHY_LOSS
+    )
+    ds_noise = (
+        Dataset.with_noise(ds, point2d_noise=0, point3d_noise=0)
+        if config["add_noise"]
+        else ds
+    )
 
-    # Note this should not belong here because its batched stuff :D
-    jaxopt_benchmark_batched = JaxoptSinglePoseBenchmarkBatched(ds_noise)
-    jaxopt_benchmark_batched.benchmark()
+    # # Note this should not belong here because its batched stuff :D
+    # jaxopt_benchmark_batched = JaxoptSinglePoseBenchmarkBatched(ds_noise)
+    # jaxopt_benchmark_batched.benchmark()
 
-
-    # jaxopt_benchmark = JaxoptSinglePoseBenchmark(ds_noise)
+    jaxopt_benchmark = JaxoptSinglePoseBenchmark(ds)
     #  total_c, total_o, total_t = jaxopt_benchmark.benchmark()
-    #  jaxopt_benchmark.benchmark()
+    jaxopt_benchmark.benchmark()
 
     initial_errors = (
-        jaxopt_benchmark_batched.shallow_results_dataset().compute_reprojection_errors_alt(loss_function=LossFunction.CAUCHY_LOSS)
+        jaxopt_benchmark.shallow_results_dataset().compute_reprojection_errors()
     )
     #  jaxopt_benchmark.benchmark_batch()
     print("finished")

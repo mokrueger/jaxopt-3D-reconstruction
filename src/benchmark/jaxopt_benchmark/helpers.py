@@ -1,15 +1,17 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.spatial.transform import Rotation
+from triangulation_relaxations.se3 import Se3
+from triangulation_relaxations.so3 import rotvec_to_r
 
 from src.dataset.camera import Camera
 from src.dataset.camera_pose.camera_pose import CameraPose
-from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
+from src.dataset.camera_pose.enums_and_types import (
+    CoordinateSystem,
+    TransformationDirection,
+)
 from src.dataset.loaders.colmap_dataset_loader.loader import params_to_intrinsics
-
-from triangulation_relaxations.se3 import Se3
-from triangulation_relaxations.so3 import rotvec_to_r
-from src.reconstruction.bundle_adjustment.pose_optimization import get_reprojection_residuals_cpu
+from src.reconstruction.bundle_adjustment.utils import get_reprojection_residuals_cpu
 
 
 def _parse_output_params(param_list, dataset):
@@ -18,38 +20,48 @@ def _parse_output_params(param_list, dataset):
     cameras = {}
     for index, params in enumerate(param_list):
         if any(np.isnan(params)):  # TODO: adjust this later
-            raise Exception("NANANANANANANANANANANANANANANANANANANANANANANANA BATMAN (nan detected)")
+            raise Exception(
+                "NANANANANANANANANANANANANANANANANANANANANANANANA BATMAN (nan detected)"
+            )
         old_camera = dataset.datasetEntries[index].camera
-        new_camera_pose = CameraPose(rotation=Rotation.from_rotvec(np.array(params[0:3])),
-                                     translation=np.array(params[3:6]),
-                                     coordinate_system=CoordinateSystem.COLMAP,
-                                     identifier=old_camera.camera_pose.identifier,
-                                     direction=TransformationDirection.W2C)
-        new_intrinsics = params_to_intrinsics(fx=float(params[6]),
-                                              fy=float(params[7]),
-                                              cx=float(params[8]),
-                                              cy=float(params[9]),
-                                              s=float(params[10]))
-        cameras.update({
-            index: Camera(camera_pose=new_camera_pose,
-                          camera_intrinsics=new_intrinsics,
-                          width=old_camera.width,
-                          height=old_camera.height)
-        })
+        new_camera_pose = CameraPose(
+            rotation=Rotation.from_rotvec(np.array(params[0:3])),
+            translation=np.array(params[3:6]),
+            coordinate_system=CoordinateSystem.COLMAP,
+            identifier=old_camera.camera_pose.identifier,
+            direction=TransformationDirection.W2C,
+        )
+        new_intrinsics = params_to_intrinsics(
+            fx=float(params[6]),
+            fy=float(params[7]),
+            cx=float(params[8]),
+            cy=float(params[9]),
+            s=float(params[10]),
+        )
+        cameras.update(
+            {
+                index: Camera(
+                    camera_pose=new_camera_pose,
+                    camera_intrinsics=new_intrinsics,
+                    width=old_camera.width,
+                    height=old_camera.height,
+                )
+            }
+        )
     return cameras
 
 
 def plot_costs(
-        ax,
-        pose0,
-        pose1,
-        points,
-        observations,
-        intrinsics,
-        eps=0.1,
-        n=1000,
-        label0="",
-        label1="",
+    ax,
+    pose0,
+    pose1,
+    points,
+    observations,
+    intrinsics,
+    eps=0.1,
+    n=1000,
+    label0="",
+    label1="",
 ):
     """Plot cost function when interpolating between pose0 and pose1"""
     taus = np.linspace(-eps, 1 + eps, n)
@@ -63,7 +75,7 @@ def plot_costs(
     objective_values = []
     for tau in taus:
         p_int = Se3(
-            (p0.q ** (1 - tau) * p1.q ** tau).R,
+            (p0.q ** (1 - tau) * p1.q**tau).R,
             p0.t * (1 - tau) + p1.t * tau,
         )
 

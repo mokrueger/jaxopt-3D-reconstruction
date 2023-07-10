@@ -133,9 +133,7 @@ class JaxoptBundleAdjustmentBenchmark(Benchmark):
         raise NotImplementedError
 
 
-from src.reconstruction.bundle_adjustment.pose_optimization import (
-    get_reprojection_residuals_cpu,
-)
+from src.reconstruction.bundle_adjustment.utils import get_reprojection_residuals_cpu
 
 if __name__ == "__main__":
     #

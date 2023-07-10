@@ -3,18 +3,22 @@ import sys
 import time
 from datetime import datetime
 
-from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params
-
 src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction/"
 if src_path not in sys.path:
     sys.path.append(src_path)
 
 import numpy as np
 
-from src.benchmark.benchmark import Benchmark, SinglePoseBenchmark, SinglePoseBenchmarkResults
+from src.benchmark.benchmark import (
+    Benchmark,
+    SinglePoseBenchmark,
+    SinglePoseBenchmarkResults,
+)
+from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params
 from src.dataset.dataset import Dataset
 from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
+from src.reconstruction.bundle_adjustment.utils import get_reprojection_residuals_cpu
 
 
 class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
@@ -37,7 +41,21 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
             self.points_gpu,
             self.observations_gpu,
             self.masks_gpu,
-        ) = None, None, None, None, None, None, None, None, None, None, None, None, None
+        ) = (
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
     def setup(self):
         self.optimizer = JaxPoseOptimizer()
@@ -72,7 +90,9 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         for _, e in enumerate(self.dataset.datasetEntries):
             cam = e.camera
 
-            mapped_points = e.map2d_3d(self.dataset.points3D_mapped, zipped=False, np=True)
+            mapped_points = e.map2d_3d(
+                self.dataset.points3D_mapped, zipped=False, np=True
+            )
             p_2d, p_3d = [np.array(l) for l in mapped_points]
             p_3d = np.concatenate([p_3d, np.ones((p_3d.shape[0], 1))], axis=1)
 
@@ -109,23 +129,23 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         self.optimizer.compile(self.points_num, batch_size=batch_size)
 
     def optimize(
-            self,
-            index: int,
-            initial_poses: np.array,
-            initial_intrinsics: np.array,
-            batch_size=8,
+        self,
+        index: int,
+        initial_poses: np.array,
+        initial_intrinsics: np.array,
+        batch_size=8,
     ):
         return self.optimizer.optimize(
             initial_poses,
             initial_intrinsics,
-            self.points_gpu[index: index + batch_size],
-            self.observations_gpu[index: index + batch_size],
-            self.masks_gpu[index: index + batch_size],
+            self.points_gpu[index : index + batch_size],
+            self.observations_gpu[index : index + batch_size],
+            self.masks_gpu[index : index + batch_size],
         )
 
     def optimize_single_pose_batched(self, camera_index, batch_size, verbose):
         # fx fy cx cy skew
-        intr = self.intrinsics[camera_index: camera_index + batch_size]
+        intr = self.intrinsics[camera_index : camera_index + batch_size]
 
         initial_intrinsics_batch = np.array(
             [
@@ -150,9 +170,9 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         start = time.perf_counter()
         params, state = self.optimize(
             index=camera_index,
-            initial_poses=self.cam_poses_gpu[camera_index:camera_index + batch_size],
+            initial_poses=self.cam_poses_gpu[camera_index : camera_index + batch_size],
             initial_intrinsics=initial_intrinsics_batch,
-            batch_size=batch_size
+            batch_size=batch_size,
         )
         optimization_time = time.perf_counter() - start
 
@@ -174,9 +194,14 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         batch_size = kwargs.get("batch_size", 1)
         c_times, o_times, param_list, state_list = [], [], [], []
         for i in range(0, len(self.cam_poses), batch_size):
-            compilation_time, optimization_time, params, state = self.optimize_single_pose_batched(i,
-                                                                                                   batch_size=batch_size,
-                                                                                                   verbose=verbose)
+            (
+                compilation_time,
+                optimization_time,
+                params,
+                state,
+            ) = self.optimize_single_pose_batched(
+                i, batch_size=batch_size, verbose=verbose
+            )
             c_times.append(compilation_time),
             o_times.append(optimization_time)
             param_list += list(params)
@@ -187,14 +212,14 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
 
         total_t = total_c + total_o
 
-        self._results = SinglePoseBenchmarkResults(camera_mapping=_parse_output_params(param_list, self.dataset))
+        self._results = SinglePoseBenchmarkResults(
+            camera_mapping=_parse_output_params(param_list, self.dataset)
+        )
         self._time = c_times, o_times, total_t
-        self._single_times = list(map(lambda x: x[0] + x[1], list(zip(c_times, o_times))))
+        self._single_times = list(
+            map(lambda x: x[0] + x[1], list(zip(c_times, o_times)))
+        )
 
-
-from src.reconstruction.bundle_adjustment.pose_optimization import (
-    get_reprojection_residuals_cpu,
-)
 
 if __name__ == "__main__":
     #
@@ -246,7 +271,7 @@ if __name__ == "__main__":
     start = time.process_time()
     for camera_index in range(0, cam_num, batch_size):
         # fx fy cx cy skew
-        intr = jaxopt_benchmark.intrinsics[camera_index: camera_index + batch_size]
+        intr = jaxopt_benchmark.intrinsics[camera_index : camera_index + batch_size]
 
         initial_intrinsics = np.array(
             [
@@ -261,7 +286,7 @@ if __name__ == "__main__":
         opt_start = time.process_time()
         params, state = jaxopt_benchmark.optimize(
             camera_index,
-            jaxopt_benchmark.cam_poses_gpu[camera_index: camera_index + batch_size],
+            jaxopt_benchmark.cam_poses_gpu[camera_index : camera_index + batch_size],
             initial_intrinsics,
             batch_size=batch_size,
         )

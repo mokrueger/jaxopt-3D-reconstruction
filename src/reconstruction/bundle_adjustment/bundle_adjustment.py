@@ -4,7 +4,6 @@ import jax
 import jax.numpy as jnp
 import jax.scipy as jscipy
 import numpy as np
-
 from jax import device_put, disable_jit, jit, lax, make_jaxpr, pmap, vmap
 from jax.experimental import sparse
 from jax.profiler import save_device_memory_profile, trace
@@ -12,37 +11,12 @@ from jax.tree_util import register_pytree_node_class
 from jaxopt import LevenbergMarquardt
 from memory_profiler import profile
 
+from src.reconstruction.bundle_adjustment.utils import (
+    parse_cam_pose_vmap,
+    parse_intrinsics_vmap,
+)
+
 # jax.config.update("jax_enable_x64", False)
-
-
-@jit
-def rot_mat_from_vec(rodrigues_vec):
-    theta = jnp.linalg.norm(rodrigues_vec)
-    r = rodrigues_vec / theta
-    I = jnp.eye(3, dtype=float)
-    r_rT = jnp.outer(r, r)
-    r_cross = jnp.cross(jnp.eye(3), r)
-    return jnp.cos(theta) * I + (1 - jnp.cos(theta)) * r_rT + jnp.sin(theta) * r_cross
-
-
-@jit
-@vmap
-def parse_intrinsics(intr_vec):
-    return jnp.array(
-        [
-            [intr_vec[0], intr_vec[4], intr_vec[2]],
-            [0, intr_vec[1], intr_vec[3]],
-            [0, 0, 1],
-        ]
-    )
-
-
-@jit
-@vmap
-def parse_cam_poses(cam_vec):
-    return jnp.concatenate(
-        [rot_mat_from_vec(cam_vec[:3]), cam_vec[3:6, jnp.newaxis]], axis=1
-    )
 
 
 @jit
@@ -122,8 +96,8 @@ class BundleAdjustment:
         intr_end_index = cam_end_index + self.cam_num * 5
 
         # parse opt params
-        poses = parse_cam_poses(opt_params[:cam_end_index].reshape((-1, 6)))
-        intrinsics = parse_intrinsics(
+        poses = parse_cam_pose_vmap(opt_params[:cam_end_index].reshape((-1, 6)))
+        intrinsics = parse_intrinsics_vmap(
             opt_params[cam_end_index:intr_end_index].reshape((-1, 5))
         )
         points_3d = opt_params[intr_end_index:].reshape((-1, 3))
