@@ -7,7 +7,9 @@ if src_path not in sys.path:
 import os
 import time
 
+import jax.numpy as jnp
 import numpy as np
+from tqdm import tqdm
 
 from src.benchmark.benchmark import SinglePoseBenchmark, SinglePoseBenchmarkResults
 from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params
@@ -32,9 +34,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         self.points = None
         self.observations = None
         self.initial_point_sizes = None
-        self.points_num = None
         self.cam_poses_gpu = None
-        self.intrinsics_gpu = None
 
     def setup(self):
         (
@@ -50,10 +50,10 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         )
 
         self.initial_point_sizes = [len(p) for p in self.points]
-        self.points_num = max(self.points, key=lambda x: x.shape[0]).shape[0]
 
         self.cam_poses_gpu = to_gpu(self.cam_poses)
-        self.intrinsics_gpu = to_gpu(self.intrinsics)
+        self.points_gpu = [to_gpu(p) for p in self.points]
+        self.observations_gpu = [to_gpu(o) for o in self.observations]
 
     def __len__(self):
         return len(self.cam_poses)
@@ -91,20 +91,19 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
     def compile(self, index):
         self.optimizer.compile(self.initial_point_sizes[index])
 
-    def optimize(
-        self, index: int, initial_pose: np.array, initial_intrinsics: np.array
-    ):
+    def optimize(self, index: int, opt_params: np.array, cx_cy_skew: np.array):
         return self.optimizer.optimize(
-            initial_pose,
-            initial_intrinsics,
-            to_gpu(self.points[index]),
-            to_gpu(self.observations[index]),
+            opt_params,
+            cx_cy_skew,
+            self.points_gpu[index],
+            self.observations_gpu[index],
         )
 
     def optimize_single_pose(self, camera_index, verbose):
         # fx fy cx cy skew
         intrinsics = self.intrinsics[camera_index]
-        initial_intrinsics = [intrinsics[0, 0], intrinsics[1, 1]]
+        fx_fy = [intrinsics[0, 0], intrinsics[1, 1]]
+        cx_cy_skew = [intrinsics[0, 2], intrinsics[1, 2], intrinsics[0, 1]]
 
         if verbose:
             print("=== compilation ===")
@@ -116,13 +115,20 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             print("compilation time:", compilation_time, "s")
             print("=== optimization ===")
 
+        opt_params_gpu = to_gpu(
+            self.optimizer.prepare_params(self.cam_poses_gpu[camera_index], *fx_fy)
+        )
+        cx_cy_skew_gpu = to_gpu(jnp.array(cx_cy_skew))
+
         start = time.perf_counter()
         params, state = self.optimize(
             index=camera_index,
-            initial_pose=self.cam_poses_gpu[camera_index],
-            initial_intrinsics=initial_intrinsics,
+            opt_params=opt_params_gpu,
+            cx_cy_skew=cx_cy_skew_gpu,
         )
         optimization_time = time.perf_counter() - start
+
+        params = np.concatenate([params, cx_cy_skew])
 
         if verbose:
             print("optimization time:", optimization_time, "s")
@@ -134,7 +140,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             )
             print(
                 "Intrinsics error:",
-                np.array(initial_intrinsics) - np.array(params[6:]),
+                np.array(fx_fy + cx_cy_skew) - np.array(params[6:]),
             )
         return compilation_time, optimization_time, params, state
 
@@ -142,7 +148,12 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
         self.setup()
         verbose = kwargs.get("verbose", True)
         c_times, o_times, param_list, state_list = [], [], [], []
-        for i in range(len(self.cam_poses)):
+
+        if verbose:
+            print("Warming up...")
+        self.optimizer.compile(3000)  # solves firts slow run problem
+
+        for i in tqdm(range(len(self.cam_poses)), desc="Camera pose: "):
             (
                 compilation_time,
                 optimization_time,
@@ -151,7 +162,7 @@ class JaxoptSinglePoseBenchmark(SinglePoseBenchmark):
             ) = self.optimize_single_pose(i, verbose=verbose)
             c_times.append(compilation_time),
             o_times.append(optimization_time)
-            param_list += list(params)
+            param_list.append(params.tolist())
             state_list += state
 
         total_c = sum(c_times)

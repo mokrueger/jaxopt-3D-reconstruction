@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from jaxopt import LevenbergMarquardt
 
-from .loss import JaxLossFunction, cauchy_loss, l2_loss
+from .loss import JaxLossFunction
 from .utils import parse_cam_pose, pose_mat_to_vec
 
 jax.config.update("jax_enable_x64", True)
@@ -31,23 +31,24 @@ class PoseOptimization:
         return cls(*children, **aux_data)
 
     @jax.jit
-    def get_residuals(self, opt_params, points, observations):
-        pose = parse_cam_pose(opt_params)
+    def get_residuals(self, params, points, observations, cx_cy_skew):
+        # fmt: off
+        pose = parse_cam_pose(params)
+        intrinsics = jnp.array( 
+            [
+                [params[6], cx_cy_skew[2], cx_cy_skew[0]],
+                [        0,     params[7], cx_cy_skew[1]],
+                [        0,             0,             1],
+            ]
+        )
+        # fmt: on
 
-        intrinsics = jnp.diag(jnp.array([opt_params[6], opt_params[7], 1]))
-
-        # reproject
         KE = jnp.einsum("ij,jk->ik", intrinsics, pose)
         p2d_projected = jnp.einsum("ij,bj->bi", KE[:, :3], points)
         p2d_projected = p2d_projected + KE[:, 3]
         p2d_projected = p2d_projected[..., :2] / p2d_projected[..., 2:3]
 
-        if self.loss_fn == JaxLossFunction.CAUCHY:
-            res = cauchy_loss(observations, p2d_projected)
-        elif self.loss_fn == JaxLossFunction.L2:
-            res = l2_loss(observations, p2d_projected)
-        else:
-            res = l2_loss(observations, p2d_projected)
+        res = self.loss_fn(observations, p2d_projected)
         return res.sum(axis=1) / self.avg_cam_width_sqr
 
 
@@ -68,17 +69,23 @@ class JaxPoseOptimizer:
 
         return lm, jax.jit(lm.run)
 
-    def optimize(self, poses0, intrinsics0, points_gpu, observations_gpu):
-        opt_params = jnp.concatenate([pose_mat_to_vec(poses0), jnp.array(intrinsics0)])
+    def prepare_params(self, poses0, fx, fy):
+        return jnp.array([*pose_mat_to_vec(poses0), fx, fy])
 
-        params, state = self.solver(opt_params, points_gpu, observations_gpu)
+    def optimize(self, opt_params, cx_cy_skew, points_gpu, observations_gpu):
+        params, state = self.solver(
+            opt_params, points_gpu, observations_gpu, cx_cy_skew
+        )
+
         params = params.block_until_ready()
 
         return params, state
 
     def compile(self, points_num):
-        # 6 for pose, 2 for intrinsics
-        params, _ = self.solver(
-            jnp.zeros(8), jnp.zeros((points_num, 3)), jnp.zeros((points_num, 2))
+        params, _ = self.optimize(
+            jnp.zeros(8),  # 6 pose, 2 intrinsics
+            jnp.zeros(3),  # intrinsics (fx, fy, cx, cy, skew)
+            jnp.zeros((points_num, 3)),  # 3d points
+            jnp.zeros((points_num, 2)),  # observations (2d points)
         )
         params.block_until_ready()
