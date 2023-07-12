@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 from matplotlib import pyplot as plt
 
-from src.benchmark.benchmark import SinglePoseBenchmark, Benchmark
+from src.benchmark.benchmark import Benchmark, SinglePoseBenchmark
 from src.config import BENCHMARK_SINGLE_POSE_RESULTS_PATH
 from src.dataset.loss_functions import LossFunction
 
@@ -138,7 +138,9 @@ def save_scatter_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
         # This has to be adjusted according to JAX
         optimization_time = b.single_times if type(b.time) == float else b.time[1]
         num_3d_points = list(map(lambda dse: dse.num_3d_points, b.dataset.datasetEntries))
+        a, _b = np.polyfit(num_3d_points, optimization_time, 1)
         ax.scatter(x=num_3d_points, y=optimization_time, alpha=1 / len(list_of_benchmarks), label=b.FRAMEWORK)
+        ax.plot(num_3d_points, a*np.array(num_3d_points)+_b,  alpha=1 / len(list_of_benchmarks))
 
     ax.set_xlabel(f"Number of 2d-3d correspondences")
     ax.set_ylabel("Optimization time in s")
