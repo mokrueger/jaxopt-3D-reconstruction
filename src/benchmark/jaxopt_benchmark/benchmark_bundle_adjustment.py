@@ -210,8 +210,9 @@ if __name__ == "__main__":
                                               benchmark_index_to_point_identifier_mapping=jaxopt_benchmark.benchmark_index_to_point_identifier_mapping)
     results = BundleAdjustmentBenchmarkResults(camera_mapping=cam, point_mapping=points)
     jaxopt_benchmark._results = results  # preliminary
+    jaxopt_benchmark.export_results_in_colmap_format(open_in_colmap=True)
     open_dataset_in_colmap(jaxopt_benchmark.shallow_results_trimmed_original_dataset())
-    open_dataset_in_colmap(jaxopt_benchmark.dataset)
+    #  open_dataset_in_colmap(jaxopt_benchmark.dataset)
     print(state)
     # print("=== optimization ===")
     # cam_num = len(jaxopt_benchmark)
