@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -49,6 +51,70 @@ def _parse_output_params(param_list, dataset):
             }
         )
     return cameras
+
+
+def _parse_output_params_bundle(param_list, dataset, num_3d_points, num_cams,
+                                benchmark_index_to_point_identifier_mapping):
+    # VERY BIG NOTE: If we don't use np.array(...) or float(...) we reference memory stored on the GPU
+    # This will be "revived" if we get the values in the queue.get(), filling up the complete GPU memory again
+
+    # Note: opt_params = jnp.concatenate([cam_params, intr_params, point_params])
+    num_cam_params = 6
+    num_intr_params = 5
+    poses = param_list[:num_cams * num_cam_params].reshape((num_cams, num_cam_params))
+    intrinsics = param_list[num_cams * num_cam_params:num_cams * num_cam_params + num_cams * num_intr_params].reshape(
+        (num_cams, num_intr_params))
+
+    """parse cameras"""
+    cameras = {}
+    for index in range(num_cams):
+        pose = poses[index]
+        intr = intrinsics[index]
+        if any(np.isnan(np.concatenate([pose, intr]))):  # TODO: adjust this later
+            raise Exception(
+                "NANANANANANANANANANANANANANANANANANANANANANANANA BATMAN (nan detected)"
+            )
+        old_camera = dataset.datasetEntries[index].camera
+        new_camera_pose = CameraPose(
+            rotation=Rotation.from_rotvec(np.array(pose[0:3])),
+            translation=np.array(pose[3:6]),
+            coordinate_system=CoordinateSystem.COLMAP,
+            identifier=old_camera.camera_pose.identifier,
+            direction=TransformationDirection.W2C,
+        )
+        new_intrinsics = params_to_intrinsics(
+            fx=float(intr[0]),
+            fy=float(intr[1]),
+            cx=float(intr[2]),
+            cy=float(intr[3]),
+            s=float(intr[4]),
+        )
+        cameras.update(
+            {
+                index: Camera(
+                    camera_pose=new_camera_pose,
+                    camera_intrinsics=new_intrinsics,
+                    width=old_camera.width,
+                    height=old_camera.height,
+                )
+            }
+        )
+    """ parse points """
+    new_points = param_list[num_cams * num_cam_params + num_cams * num_intr_params:].reshape((num_3d_points, 3))
+    point_mapping = {}
+    for index, point in enumerate(new_points):
+        identifier = benchmark_index_to_point_identifier_mapping.get(index)
+        copied_point = copy.deepcopy(dataset.points3D_mapped.get(identifier))
+
+        # get new data
+
+        # Note we need this mapping and cannot use point[0], point[1], ...; because it revives GPU memory
+        copied_point.x, copied_point.y, copied_point.z = list(map(float, np.array(point)))
+        copied_point.metadata.update({"note": "returned from bundle adjustment"})
+        point_mapping.update({
+            identifier: copied_point
+        })
+    return cameras, point_mapping
 
 
 def plot_costs(

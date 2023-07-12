@@ -164,3 +164,4 @@ dataset/
 src/benchmark/evaluation
 datasets/*
 benchmark_results/*/*/*.pkl
+/src/benchmark/jaxopt_benchmark/export_results/*

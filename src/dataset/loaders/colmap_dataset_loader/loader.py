@@ -1,5 +1,7 @@
 import os
+import shutil
 import subprocess
+from uuid import uuid4
 
 import numpy as np
 from pathlib import Path
@@ -223,6 +225,15 @@ def show_in_colmap(sparse_path, image_path, database_path="/tmp/tmp.db", block=F
                           "--database_path", database_path,
                           "--image_path", image_path,
                           ], stdout=subprocess.PIPE)
+
+
+def open_dataset_in_colmap(dataset: Dataset, output_path="export_results/" + str(uuid4())):
+    # For debugging only
+    # TODO: note: not tested, is technically a duplicate with the benchmark.show... methods
+    os.makedirs(output_path, exist_ok=True)
+    export_in_colmap_format(dataset, output_path, binary=True)
+    show_in_colmap(output_path, dataset.images_path, block=True)
+    shutil.rmtree(output_path)
 
 
 if __name__ == "__main__":

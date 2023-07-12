@@ -222,3 +222,91 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         if self._time:
             return self._time
         raise AttributeError
+
+    def shallow_results_trimmed_original_dataset(self):
+        # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
+        if self._results:
+            copied_dataset = copy.copy(self.dataset)  # Shallow copy(!) is enough to export, but be really careful here
+
+            copied_dataset.datasetEntries = list(map(lambda x: copy.copy(x), copy.copy(copied_dataset.datasetEntries)))
+
+            prior_point_length = len(copied_dataset.points3D)
+            results_point_ids = [p.identifier for p in list(self._results.point_mapping.values())]
+            copied_dataset.points3D = [p for p in copied_dataset.points3D if p.identifier in results_point_ids]
+            posterior_point_length = len(self._results.point_mapping.values())
+
+            assert prior_point_length != posterior_point_length
+
+            """for reduced datasets only for testing"""
+            copied_dataset.datasetEntries = copied_dataset.datasetEntries[0:len(self._results.camera_mapping)]
+
+            for index, de in enumerate(copied_dataset.datasetEntries):
+                if prior_point_length != posterior_point_length:
+                    de.points2D = copy.copy(de.points2D)  # Replace by shallow copy, points are still -> orig. dataset
+                    for index in range(len(de.points2D)):  # this is slow as fk
+                        try:
+                            copied_dataset.points3D_mapped[de.points2D[index].point3D_identifier]
+                        except KeyError:
+                            # Point got lost due to reduced dataset for debug test
+                            mod_point = copy.deepcopy(de.points2D[index])
+                            mod_point.point3D_identifier = None
+                            de.points2D[index] = mod_point  # Note: the list is a new object, created by copy.copy(...)
+            copied_dataset.refresh_mapping()
+            return copied_dataset
+        raise AttributeError
+
+    def shallow_results_dataset(self):
+        # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
+        if self._results:
+            copied_dataset = copy.copy(self.dataset)  # Shallow copy(!) is enough to export, but be really careful here
+
+            copied_dataset.datasetEntries = list(map(lambda x: copy.copy(x), copy.copy(copied_dataset.datasetEntries)))
+
+            prior_point_length = len(copied_dataset.points3D)
+            copied_dataset.points3D = list(self._results.point_mapping.values())
+            copied_dataset.refresh_mapping()
+            posterior_point_length = len(copied_dataset.points3D)
+
+            if prior_point_length != posterior_point_length:
+                """for reduced datasets only for testing"""
+                copied_dataset.datasetEntries = copied_dataset.datasetEntries[0:len(self._results.camera_mapping)]
+
+            # Since only the camera changes we can substitute it with the by the new cameras
+            camera_mapping = self._results.camera_mapping
+            for index, de in enumerate(copied_dataset.datasetEntries):
+                de.camera = camera_mapping.get(index)
+                """For reduced datasets (for our test) we modify point2D identifiers"""
+                if prior_point_length != posterior_point_length:
+                    de: DatasetEntry
+                    de.points2D = copy.copy(de.points2D)  # Replace by shallow copy, points are still -> orig. dataset
+                    for index in range(len(de.points2D)):  # this is slow as fk
+                        try:
+                            copied_dataset.points3D_mapped[de.points2D[index].point3D_identifier]
+                        except KeyError:
+                            # Point got lost due to reduced dataset for debug test
+                            mod_point = copy.deepcopy(de.points2D[index])
+                            mod_point.point3D_identifier = None
+                            de.points2D[index] = mod_point  # Note: the list is a new object, created by copy.copy(...)
+                """end"""
+
+            copied_dataset.refresh_mapping()
+            return copied_dataset
+        raise AttributeError
+
+    def reprojection_errors(self, loss_function):  # TODO: note: copied from above
+        if self._results:
+            dataset = self.shallow_results_dataset()
+            reprojection_errors = dataset.compute_reprojection_errors_alt(loss_function=loss_function)
+            reprojection_errors_list = np.array(
+                [item for sublist in list(reprojection_errors.values()) for item in sublist]
+            )
+            return reprojection_errors_list
+        raise AttributeError
+
+    def export_results_in_colmap_format(self, output_path="export_results/" + str(uuid4()), open_in_colmap=False):
+        # TODO: note: copied from above, can be refactored into benchmark class
+        os.makedirs(output_path, exist_ok=True)
+        shallow_results_dataset = self.shallow_results_dataset()
+        export_in_colmap_format(shallow_results_dataset, output_path, binary=True)
+        if open_in_colmap:
+            show_in_colmap(output_path, shallow_results_dataset.images_path, block=False)
