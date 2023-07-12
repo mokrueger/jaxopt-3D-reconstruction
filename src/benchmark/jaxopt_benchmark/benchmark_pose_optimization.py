@@ -1,11 +1,6 @@
 import os
 import sys
 import time
-from datetime import datetime
-
-src_path = "/home/kuti/py_ws/gsu_jaxopt/jaxopt-3D-reconstruction/"
-if src_path not in sys.path:
-    sys.path.append(src_path)
 
 import numpy as np
 from tqdm import tqdm
@@ -13,13 +8,9 @@ from tqdm import tqdm
 from src.benchmark.benchmark import SinglePoseBenchmark, SinglePoseBenchmarkResults
 from src.benchmark.jaxopt_benchmark.helpers import _parse_output_params
 from src.dataset.dataset import Dataset
-from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.reconstruction.bundle_adjustment.loss import JaxLossFunction
 from src.reconstruction.bundle_adjustment.pose_optimization import JaxPoseOptimizer
-from src.reconstruction.bundle_adjustment.utils import (
-    get_reprojection_residuals_cpu,
-    to_gpu,
-)
+from src.reconstruction.bundle_adjustment.utils import to_gpu
 
 
 class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):

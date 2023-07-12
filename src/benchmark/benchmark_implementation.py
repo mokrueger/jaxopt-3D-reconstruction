@@ -20,7 +20,7 @@ from src.benchmark.colmap_benchmark.benchmark_single_pose import (
 from src.benchmark.gtsam_benchmark.benchmark_bundle_adjustment import (
     GtsamBundleAdjustmentBenchmark,
 )
-from src.benchmark.jaxopt_benchmark.benchmark_batched_pose import JaxoptSinglePoseBenchmarkBatched
+from src.benchmark.jaxopt_benchmark.benchmark_pose_optimization import JaxoptSinglePoseBenchmarkBatched
 from src.benchmark.jaxopt_benchmark.benchmark_bundle_adjustment import JaxoptBundleAdjustmentBenchmark
 from src.config import DATASETS_PATH, BENCHMARK_SINGLE_POSE_RESULTS_PATH
 #  from src.benchmark.gtsam_benchmark.benchmark_single_pose import import benchmark_gtsam_single_pose
