@@ -13,7 +13,7 @@ class PoseOptimization:
     def __init__(
         self,
         avg_cam_width_sqr,
-        loss_fn: JaxLossFunction = JaxLossFunction.L2,
+        loss_fn,
     ):
         self.avg_cam_width_sqr = avg_cam_width_sqr
         self.loss_fn = loss_fn
@@ -53,14 +53,14 @@ class PoseOptimization:
 
 
 class JaxPoseOptimizer:
-    def __init__(self, avg_cam_width, loss_fn: JaxLossFunction = JaxLossFunction.L2):
+    def __init__(self, avg_cam_width, loss_fn: JaxLossFunction = JaxLossFunction.CAUCHY):
         self.po = PoseOptimization(avg_cam_width**2, loss_fn=loss_fn)
         self.optimizer, self.solver = self.create_lm_optimizer()
 
     def create_lm_optimizer(self):
         lm = LevenbergMarquardt(
             residual_fun=self.po.get_residuals,
-            tol=1e-6,
+            tol=1e-7,
             jit=True,
             solver="cholesky",
             maxiter=100,

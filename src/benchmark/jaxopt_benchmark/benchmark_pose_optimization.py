@@ -167,7 +167,9 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
             len(self.points[camera_index]) if batch_size == 1 else self.points_num,
             batch_size=batch_size,
         )
-        initial_time = time.perf_counter() - start
+        compilation_time = time.perf_counter() - start
+        if batch_size != 1 and camera_index != 0:
+            compilation_time = 0.0
 
         start = time.perf_counter()
         params, state = self.optimize(
@@ -178,7 +180,6 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
             masks_gpu,
         )
         optimization_time = time.perf_counter() - start
-        compilation_time = max(0.0, initial_time - optimization_time)
 
         params = np.concatenate([params, cx_cy_skew], axis=1)
 
@@ -204,7 +205,9 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
 
         if verbose:
             print("Warming up...")
+        s = time.perf_counter()
         self.compile(3000, batch_size=batch_size)
+        e = time.perf_counter() - s
 
         for i in tqdm(
             range(0, len(self.cam_poses), batch_size),

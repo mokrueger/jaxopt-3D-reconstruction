@@ -54,12 +54,12 @@ def save_benchmarks(list_of_benchmarks: List[Benchmark], parent_dir, override_la
             shutil.copy(f, path_in_latest)
 
 
-def benchmark_single_pose(dataset):
+def benchmark_single_pose(dataset, **kwargs):
     # jaxopt_benchmark = JaxoptSinglePoseBenchmark(dataset)
 
     print("Benchmarking JAX")
     jaxopt_benchmark_batched = JaxoptSinglePoseBenchmarkBatched(dataset)
-    jaxopt_benchmark_batched.subprocess_benchmark(verbose=False)
+    jaxopt_benchmark_batched.subprocess_benchmark(verbose=False, batch_size=kwargs.get("batch_size"))
     total_c, total_o, total_t = jaxopt_benchmark_batched.time
     total_e = sum(total_o)
 
@@ -112,10 +112,15 @@ if __name__ == "__main__":
     ###################################
     print("Loading datasets")
     datasets = [
-        partial(load_colmap_dataset, REICHSTAG_SPARSE_NOISED, REICHSTAG_IMAGES, binary=True, name="Reichstag"),
-        partial(load_colmap_dataset, SACRE_COEUR_SPARSE_NOISED, SACRE_COEUR_IMAGES, binary=True, name="Sacre Coeur"),
-        partial(load_colmap_dataset, ST_PETERS_SQUARE_SPARSE_NOISED, ST_PETERS_SQUARE_IMAGES, binary=True,
-                name="St. Peters Square")
+        {"dataset": partial(load_colmap_dataset, REICHSTAG_SPARSE_NOISED, REICHSTAG_IMAGES, binary=True,
+                            name="Reichstag"),
+         "batch_size": 75},
+        {"dataset": partial(load_colmap_dataset, SACRE_COEUR_SPARSE_NOISED, SACRE_COEUR_IMAGES, binary=True,
+                            name="Sacre Coeur"),
+         "batch_size": 131},
+        {"dataset": partial(load_colmap_dataset, ST_PETERS_SQUARE_SPARSE_NOISED, ST_PETERS_SQUARE_IMAGES, binary=True,
+                            name="St. Peters Square"),
+         "batch_size": 313}
     ]
 
     print("Adding noise")
@@ -123,7 +128,8 @@ if __name__ == "__main__":
 
     evaluation = []
     for nd in noisy_datasets:
-        dataset = nd()
+        dataset = nd["dataset"]()
+        batch_size = nd["batch_size"]
         print(f"Benchmarking {str(dataset.name)}")
         problem_metadata = {
             "points2D_per_image": dataset.avg_num_2d_points_per_image(),
@@ -132,7 +138,7 @@ if __name__ == "__main__":
             "num_points3D": dataset.num_3d_points(),
         }
         #  statistics = benchmark_bundle_adjustment(dataset)
-        statistics = benchmark_single_pose(dataset)
+        statistics = benchmark_single_pose(dataset, batch_size=batch_size)
         eval = {**problem_metadata, **statistics}
         print("Evaluation:")
         print(eval)

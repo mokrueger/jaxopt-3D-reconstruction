@@ -14,9 +14,7 @@ from src.dataset.loaders.colmap_dataset_loader.points import read_points3d_bin
 class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
     FRAMEWORK = "Colmap"
 
-    def benchmark(self, refine_focal_length=False,
-                  validate_result=True, validation_error_position=5e-02,
-                  validation_error_rotation=1e-02):
+    def benchmark(self, *args, **kwargs):
         os.makedirs("benchmark_input", exist_ok=True)
         export_in_colmap_format(self.dataset, "benchmark_input", binary=True)
 
@@ -40,6 +38,7 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         self._results = BundleAdjustmentBenchmarkResults(camera_mapping=result_cameras,
                                                          point_mapping=result_points)
         self._time = self_reported_time
+        self._iterations = bundle_adjustment_report.iterations
 
 
 if __name__ == "__main__":

@@ -210,6 +210,7 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         super().__init__(dataset)
         self._results = None
         self._time = None
+        self._iterations = None
 
     @property
     def results(self) -> BundleAdjustmentBenchmarkResults:
@@ -222,6 +223,13 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         if self._time:
             return self._time
         raise AttributeError
+
+    @property
+    def iterations(self):
+        if self._iterations:
+            return self._iterations
+        raise AttributeError
+
 
     def shallow_results_trimmed_original_dataset(self):
         # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
@@ -277,7 +285,6 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
                 de.camera = camera_mapping.get(index)
                 """For reduced datasets (for our test) we modify point2D identifiers"""
                 if prior_point_length != posterior_point_length:
-                    de: DatasetEntry
                     de.points2D = copy.copy(de.points2D)  # Replace by shallow copy, points are still -> orig. dataset
                     for index in range(len(de.points2D)):  # this is slow as fk
                         try:

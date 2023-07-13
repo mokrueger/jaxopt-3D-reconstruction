@@ -87,7 +87,7 @@ class GtsamBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             total_time = time.perf_counter() - start
         except RuntimeError as e:
             # TODO: Something here
-            return ...
+            raise e
 
         result.print('Final results:\n')
         print('initial error = {}'.format(graph.error(initial_estimate)))

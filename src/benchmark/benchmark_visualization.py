@@ -23,13 +23,15 @@ def save_reprojection_error_histogram(list_of_benchmarks):
 
     hist_data = np.histogram(reprojection_errors, bins="auto")
     # Filter counts of below 1% of top height to get new bins
-    threshold = np.max(hist_data[0]) * 0.005
-    indices = np.where(hist_data[0] >= threshold)[0]
-    bins = hist_data[1][indices]
+    # threshold = np.max(hist_data[0]) * 0.005
+    # indices = np.where(hist_data[0] >= threshold)[0]
+    # bins = hist_data[1][indices]
+    bins = hist_data[1]
 
-    filtered_reprojection_errors = []
-    for re in reprojection_errors:
-        filtered_reprojection_errors.append(re[np.where(re <= bins[-1] + 5e-01)])
+    # filtered_reprojection_errors = []
+    # for re in reprojection_errors:
+    #     filtered_reprojection_errors.append(re[np.where(re <= bins[-1] + 5e-01)])
+    filtered_reprojection_errors = reprojection_errors
 
     for re, b in list(zip(filtered_reprojection_errors, list_of_benchmarks)):
         ax.hist(re, bins=bins, alpha=1 / len(list_of_benchmarks), label=b.FRAMEWORK)
@@ -56,27 +58,28 @@ def save_runtime_plot(list_of_benchmarks):
     ax: plt.Axes
     fig, ax = plt.subplots()
 
-    """ Full runtime """
-    cams = list(range(len(list_of_benchmarks[0].dataset.datasetEntries)))
-    for index, b in enumerate(list_of_benchmarks):  # Note this does not work if batch_size != 1 for now
-        ax.bar(np.array(cams) + 0.25 * index, b.single_times, label=b.FRAMEWORK, width=0.25)
-    ax.set_xlabel(f"Cameras")
-    ax.set_ylabel("Execution time in s")
-    ax.legend(loc='upper right')
-    ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
-
-    fig.savefig(
-        f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}/{list_of_benchmarks[0].NAME.replace(' ', '_').lower() + '_'}"
-        f"runtime_plot_{list_of_benchmarks[0].dataset.name.replace(' ', '').lower()}"
-        f".png"
-    )
+    # """ Full runtime """
+    # cams = list(range(len(list_of_benchmarks[0].dataset.datasetEntries)))
+    # for index, b in enumerate(list_of_benchmarks):  # Note this does not work if batch_size != 1 for now
+    #     ax.bar(np.array(cams) + 0.25 * index, b.single_times, label=b.FRAMEWORK, width=0.25)
+    # ax.set_xlabel(f"Cameras")
+    # ax.set_ylabel("Execution time in s")
+    # ax.legend(loc='upper right')
+    # ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
+    #
+    # fig.savefig(
+    #     f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}/{list_of_benchmarks[0].NAME.replace(' ', '_').lower() + '_'}"
+    #     f"runtime_plot_{list_of_benchmarks[0].dataset.name.replace(' ', '').lower()}"
+    #     f".png"
+    # )
 
     """ mean runtime """
     fig: plt.Figure
     ax: plt.Axes
     fig, ax = plt.subplots()
+    num_cams = len(list_of_benchmarks[0].dataset.datasetEntries)
     names = list(map(lambda b: f"{b.FRAMEWORK}", list_of_benchmarks))
-    ax.bar(names, list(map(lambda b: np.mean(b.single_times), list_of_benchmarks)))
+    ax.bar(names, list(map(lambda b: np.sum(b.single_times) / num_cams, list_of_benchmarks)))
 
     ax.set_xlabel(f"Frameworks")
     ax.set_ylabel("Mean execution time per camera in s")
@@ -89,34 +92,42 @@ def save_runtime_plot(list_of_benchmarks):
         f".png"
     )
 
-    """ Optimization time """
-    fig: plt.Figure
-    ax: plt.Axes
-    fig, ax = plt.subplots()
-    cams = list(range(len(list_of_benchmarks[0].dataset.datasetEntries)))
-    for index, b in enumerate(list_of_benchmarks):
-        # This has to be adjusted according to JAX
-        optimization_time = b.single_times if type(b.time) == float else b.time[1]
-        ax.bar(np.array(cams) + 0.25 * index, optimization_time, label=b.FRAMEWORK, width=0.25)
-    ax.set_xlabel(f"Cameras")
-    ax.set_ylabel("Execution time in s")
-    ax.legend(loc='upper right')
-    ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
-
-    fig.savefig(
-        f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}/{list_of_benchmarks[0].NAME.replace(' ', '_').lower() + '_'}"
-        f"optimization_time_plot_{list_of_benchmarks[0].dataset.name.replace(' ', '').lower()}"
-        f".png"
-    )
+    # """ Optimization time """
+    # fig: plt.Figure
+    # ax: plt.Axes
+    # fig, ax = plt.subplots()
+    # cams = list(range(len(list_of_benchmarks[0].dataset.datasetEntries)))
+    # for index, b in enumerate(list_of_benchmarks):
+    #     # This has to be adjusted according to JAX
+    #     optimization_time = b.single_times if type(b.time) == float else b.time[1]
+    #     ax.bar(np.array(cams) + 0.25 * index, optimization_time, label=b.FRAMEWORK, width=0.25)
+    # ax.set_xlabel(f"Cameras")
+    # ax.set_ylabel("Execution time in s")
+    # ax.legend(loc='upper right')
+    # ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
+    #
+    # fig.savefig(
+    #     f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}/{list_of_benchmarks[0].NAME.replace(' ', '_').lower() + '_'}"
+    #     f"optimization_time_plot_{list_of_benchmarks[0].dataset.name.replace(' ', '').lower()}"
+    #     f".png"
+    # )
 
     """ mean optimization time """
     """ mean runtime """
     fig: plt.Figure
     ax: plt.Axes
     fig, ax = plt.subplots()
+    num_cams = len(list_of_benchmarks[0].dataset.datasetEntries)
     names = list(map(lambda b: f"{b.FRAMEWORK}", list_of_benchmarks))
-    ax.bar(names, list(
-        map(lambda b: np.mean(b.single_times) if type(b.time) == float else np.mean(b.time[1]), list_of_benchmarks)))
+    ax.bar(
+        names,
+        list(
+            map(
+                lambda b: np.sum(b.single_times) / num_cams if type(b.time) == float else np.sum(b.time[1]) / num_cams,
+                list_of_benchmarks
+            )
+        )
+    )
 
     ax.set_xlabel(f"Frameworks")
     ax.set_ylabel("Mean execution time per camera in s")
@@ -140,7 +151,7 @@ def save_scatter_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
         num_3d_points = list(map(lambda dse: dse.num_3d_points, b.dataset.datasetEntries))
         a, _b = np.polyfit(num_3d_points, optimization_time, 1)
         ax.scatter(x=num_3d_points, y=optimization_time, alpha=1 / len(list_of_benchmarks), label=b.FRAMEWORK)
-        ax.plot(num_3d_points, a*np.array(num_3d_points)+_b,  alpha=1 / len(list_of_benchmarks))
+        ax.plot(num_3d_points, a * np.array(num_3d_points) + _b, alpha=1 / len(list_of_benchmarks))
 
     ax.set_xlabel(f"Number of 2d-3d correspondences")
     ax.set_ylabel("Optimization time in s")
@@ -227,7 +238,7 @@ def single_pose_statistics(list_of_benchmarks: List[SinglePoseBenchmark]):
     save_runtime_plot(list_of_benchmarks)
     save_iteration_plot(list_of_benchmarks)
     #  if any([isinstance(b, JaxoptSinglePoseBenchmark) for b in list_of_benchmarks]):
-    save_scatter_plot(list_of_benchmarks)
+    #  save_scatter_plot(list_of_benchmarks)
 
     #  Camera.difference(list(cr.camera_mapping.values())[0], list(jr.camera_mapping.values())[0])
     #  colmapSinglePoseBenchmark.export_results_in_colmap_format(open_in_colmap=True)
