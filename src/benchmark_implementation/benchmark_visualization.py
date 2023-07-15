@@ -10,7 +10,7 @@ from src.dataset.loss_functions import LossFunction
 
 
 def save_reprojection_error_histogram(list_of_benchmarks):
-    os.makedirs("evaluation", exist_ok=True)
+    os.makedirs("../benchmark/evaluation", exist_ok=True)
     os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
     reprojection_errors = []
     for benchmark in list_of_benchmarks:
@@ -51,7 +51,7 @@ def save_reprojection_error_histogram(list_of_benchmarks):
 
 
 def save_runtime_plot(list_of_benchmarks):
-    os.makedirs("evaluation", exist_ok=True)
+    os.makedirs("../benchmark/evaluation", exist_ok=True)
     os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
 
     fig: plt.Figure
@@ -166,7 +166,7 @@ def save_scatter_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
 
 
 def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
-    os.makedirs("evaluation", exist_ok=True)
+    os.makedirs("../benchmark/evaluation", exist_ok=True)
     os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
 
     fig: plt.Figure

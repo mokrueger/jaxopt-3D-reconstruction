@@ -215,7 +215,7 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
     @property
     def results(self) -> BundleAdjustmentBenchmarkResults:
         if self._results:
-            return self.results
+            return self._results
         raise AttributeError
 
     @property
@@ -229,7 +229,6 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         if self._iterations:
             return self._iterations
         raise AttributeError
-
 
     def shallow_results_trimmed_original_dataset(self):
         # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
@@ -262,6 +261,52 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
             copied_dataset.refresh_mapping()
             return copied_dataset
         raise AttributeError
+
+    def subprocess_benchmark(self, benchmark_function_name="benchmark", *args, **kwargs, ):
+        """
+        Args:
+            benchmark_function_name: function name of to-be-called benchmark function (for e.g. in-dev functions)
+            *args (object): args passed to benchmark function
+            **kwargs (object): kwargs passed to benchmark function
+        """
+
+        def execute_subprocess_benchmark(dataset, queue: multiprocessing.Queue, function_name: str,
+                                         *ar, **kw):
+            subprocess_benchmark_class = self.__class__(copy.copy(dataset))
+            benchmark_function = getattr(subprocess_benchmark_class, function_name)
+            benchmark_function(*ar, **kw)
+            queue.put(subprocess_benchmark_class.results)
+            queue.put(subprocess_benchmark_class.time)
+            queue.put(subprocess_benchmark_class.iterations)
+            print("Process exiting")
+            exit(0)
+
+        q = multiprocessing.Queue()
+        p = multiprocessing.Process(target=execute_subprocess_benchmark,
+                                    args=args,
+                                    kwargs={
+                                        "queue": q,
+                                        "dataset": self.dataset,
+                                        "function_name": benchmark_function_name,
+                                        **kwargs,
+                                    })
+        p.start()
+        item_count = 0
+        items = []
+        while item_count != 3:  # We do this because join does not work when putting large objects in queue.
+            if q.empty():
+                time.sleep(5)
+            else:
+                if item_count == 0:
+                    print("transferring items")
+                items.append(q.get())
+                item_count += 1
+        p.join()  # Now it can exit and join properly.
+        if p.exitcode != 0:
+            raise Exception("An unknown exception happened.")
+        self._results = copy.deepcopy(items[0])
+        self._time = copy.deepcopy(items[1])
+        self._iterations = copy.deepcopy(items[2])
 
     def shallow_results_dataset(self):
         # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)

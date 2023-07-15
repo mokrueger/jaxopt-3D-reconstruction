@@ -25,6 +25,7 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         bundle_adjustment_report = _process_std_out(std_out)
         self_reported_time += bundle_adjustment_report.time
         measured_time += t
+
         result_points = {p.identifier: p for p in
                          _parse_points(read_points3d_bin(os.path.join("benchmark_output", "points3D.bin")))}
         result_cameras = _parse_cameras_only(
@@ -32,6 +33,9 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             cameras=read_cameras_bin(os.path.join("benchmark_output", "cameras.bin")),
             path_to_images=self.dataset.images_path
         )
+        # Since colmap starts with non-zero indices we have to undo that by subtracting 1 from each id
+        result_cameras = {k - 1: v for k, v in result_cameras.items()}
+
         shutil.rmtree("benchmark_output")
 
         shutil.rmtree("benchmark_input")

@@ -95,11 +95,12 @@ class GtsamBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
         """ interpret result """  # TODO: Parse into dataset to visualize
         corresponding_cameras = {}
-        for index, de in enumerate(self.dataset.datasetEntries, start=0):
+        for index, de in enumerate(self.dataset.datasetEntries):
             camera = initial_estimate.atPinholeCameraCal3_S2(X(index))
             camera_intrinsics = camera.calibration()
             corresponding_cameras.update({
-                de.identifier:
+                #  de.identifier:
+                index:
                     Camera(
                         camera_pose=CameraPose.from_string_transformation_translation(
                             string=str(camera.pose().matrix()).replace("[", "").replace("]", ""),
@@ -131,6 +132,7 @@ class GtsamBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         self._results = BundleAdjustmentBenchmarkResults(camera_mapping=corresponding_cameras,
                                                          point_mapping=corresponding_points)
         self._time = total_time
+        self._iterations = optimizer.iterations()
 
 
 if __name__ == "__main__":

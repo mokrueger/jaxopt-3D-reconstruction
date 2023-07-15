@@ -128,15 +128,34 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         )
 
     def benchmark(self, *args, **kwargs):
-        pass
+        verbose = kwargs.get("verbose", False)
+        initial_intrinsics = np.array(
+            [
+                [
+                    intr[0, 0],
+                    intr[1, 1],
+                    intr[0, 2],
+                    intr[1, 2],
+                    intr[0, 1],
+                ]
+                for intr in self.intrinsics
+            ]
+        )
+        start = time.perf_counter()
+        params, state = self.optimize(
+            self.cam_poses, initial_intrinsics
+        )
 
-    @property
-    def results(self):
-        raise NotImplementedError
+        total_time = time.perf_counter() - start
 
-    @property
-    def time(self):
-        raise NotImplementedError
+        cam, points = _parse_output_params_bundle(params,
+                                                  self.dataset,
+                                                  num_3d_points=len(self.points_3d_all),
+                                                  num_cams=len(self.cam_poses),
+                                                  benchmark_index_to_point_identifier_mapping=self.benchmark_index_to_point_identifier_mapping)
+        self._results = BundleAdjustmentBenchmarkResults(camera_mapping=cam, point_mapping=points)
+        self._time = total_time
+        self._iterations = int(state.iter_num)
 
 
 from src.reconstruction.bundle_adjustment.utils import get_reprojection_residuals_cpu

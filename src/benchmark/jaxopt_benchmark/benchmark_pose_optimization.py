@@ -105,13 +105,13 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         )
 
     def _get_mask(self, index, batch_size=1):
-        if batch_size == 1:
+        if batch_size == 0:
             return to_gpu(np.ones((1, len(self.points[index]))))
 
         return to_gpu(self.masks[index : index + batch_size])
 
     def _prepare_points(self, index, batch_size=1):
-        if batch_size == 1:
+        if batch_size == 0:
             return (
                 to_gpu(self.points[index][None, ...]),
                 to_gpu(self.observations[index][None, ...]),
@@ -164,11 +164,11 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
 
         start = time.perf_counter()
         self.compile(
-            len(self.points[camera_index]) if batch_size == 1 else self.points_num,
+            len(self.points[camera_index]) if batch_size == 0 else self.points_num,
             batch_size=batch_size,
         )
         compilation_time = time.perf_counter() - start
-        if batch_size != 1 and camera_index != 0:
+        if batch_size != 0 and camera_index != 0:
             compilation_time = 0.0
 
         start = time.perf_counter()
@@ -234,11 +234,11 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
         total_t = total_c + total_o
         iterations = (
             list(map(lambda s: int(s.iter_num), state_list))
-            if batch_size == 1
+            if batch_size == 0
             else [int(a) for l in [list(s.iter_num) for s in state_list] for a in l]
         )
         if verbose:
-            if batch_size == 1:
+            if batch_size == 0:
                 print(
                     f"Average iterations: {np.round(np.average(iterations), decimals=2)}"
                 )
