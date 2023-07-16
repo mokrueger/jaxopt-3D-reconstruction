@@ -25,7 +25,7 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         super().__init__(dataset)
 
         self.points_limit = 300
-        self.camera_limit = 5
+        self.camera_limit = 15
 
         (
             self.points_2d_all,
@@ -65,7 +65,9 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             avg_cam_width += d_entry.camera.width
             cam_poses.append(d_entry.camera.camera_pose.rotation_translation_matrix)
             intrinsics.append(d_entry.camera.camera_intrinsics.camera_intrinsics_matrix)
-            map_2d_3d_list.append(d_entry.map2d_3d(self.dataset.points3D_mapped))
+            map_2d_3d_list.append(
+                d_entry.map2d_3d(self.dataset.points3D_mapped)[: self.points_limit]
+            )
             p3d.update({p3.identifier: p3.xyz for _, p3 in map_2d_3d_list[-1]})
 
         max_2d_indices = max(len(i) for i in map_2d_3d_list)
@@ -89,10 +91,10 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
-        p3d_indices_all = np.array(p3d_indices_all)[..., : self.points_limit]
+        p3d_indices_all = np.array(p3d_indices_all)
         points_3d_all = np.array(points_3d_all)
-        points_2d_all = np.array(points_2d_all)[..., : self.points_limit, :]
-        masks_all = np.array(masks_all)[..., : self.points_limit]
+        points_2d_all = np.array(points_2d_all)
+        masks_all = np.array(masks_all)
 
         benchmark_index_to_point_identifier_mapping = {v: k for k, v in p3d_ids.items()}
 
@@ -142,12 +144,6 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         compile_time = time.perf_counter() - start
 
         print("compile: ", compile_time)
-
-        # print("opt_params:", opt_params.shape, opt_params.dtype)
-        # print("points_2d_all:", points_2d_all.shape, points_2d_all.dtype)
-        # print("p3d_indices_all:", p3d_indices_all.shape, p3d_indices_all.dtype)
-        # print("cx_cy_skew:", cx_cy_skew.shape, cx_cy_skew.dtype)
-        # print("masks_all:", masks_all.shape, masks_all.dtype)
 
         start = time.perf_counter()
         params, state = self.optimize(opt_params, cx_cy_skew)
