@@ -24,8 +24,8 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
     def __init__(self, dataset: Dataset):
         super().__init__(dataset)
 
-        self.points_limit = 300
-        self.camera_limit = 15
+        self.points_limit = 4000
+        self.camera_limit = 10
 
         (
             self.points_2d_all,
@@ -39,10 +39,8 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         ) = self._prepare_dataset()
 
         self.points_2d_all_gpu = to_gpu(self.points_2d_all)
-        self.points_3d_all_gpu = to_gpu(self.points_3d_all)
         self.p3d_indices_all_gpu = to_gpu(self.p3d_indices_all)
         self.masks_all_gpu = to_gpu(self.masks_all)
-        self.cam_poses_gpu = to_gpu(self.cam_poses)
 
         self.optimizer = JaxBundleAdjustment(len(self.cam_poses), self.avg_cam_width)
 
@@ -89,6 +87,8 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             p3d_indices_all.append(p3d_indices + (p3d_indices[0],) * pad_len)
             masks_all.append([1.0] * len(points_2d) + [0.0] * pad_len)
 
+        avg_cam_width /= len(cam_poses)
+        
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
         p3d_indices_all = np.array(p3d_indices_all)
@@ -111,7 +111,7 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
     def compile(self) -> None:
         self.optimizer.compile(
-            len(self.points_3d_all_gpu), len(self.p3d_indices_all[0])
+            len(self.points_3d_all), len(self.p3d_indices_all[0])
         )
 
     def optimize(self, opt_params: np.array, cx_cy_skew: np.array):
@@ -151,6 +151,7 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
         print("run: ", total_time)
 
+        print("iterations:", state.iter_num)
         cam, points = _parse_output_params_bundle(
             params,
             self.dataset,

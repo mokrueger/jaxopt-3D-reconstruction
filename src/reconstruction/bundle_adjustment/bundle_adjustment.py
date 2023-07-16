@@ -11,7 +11,7 @@ from src.reconstruction.bundle_adjustment.utils import (
 
 from .loss import l2_loss
 
-jax.config.update("jax_enable_x64", False)
+jax.config.update("jax_enable_x64", True)
 
 
 @jax.jit
@@ -71,13 +71,13 @@ class BundleAdjustment:
             KE, points_2d_all, p3d_indices_all, points_3d, masks_all
         )
 
-        return error.sum(axis=1) / self.avg_cam_width_sqr
+        return error.flatten() / self.avg_cam_width_sqr
 
 
 class JaxBundleAdjustment:
     def __init__(self, cam_num, avg_cam_width):
         self.cam_num = cam_num
-        self.ba = BundleAdjustment(self.cam_num, avg_cam_width)
+        self.ba = BundleAdjustment(self.cam_num, avg_cam_width**2)
         self.optimizer, self.solver = self.create_lm_optimizer()
 
     def create_lm_optimizer(self):
