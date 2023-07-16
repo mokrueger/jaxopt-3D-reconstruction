@@ -25,6 +25,7 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
     FRAMEWORK = "Colmap"
 
     def benchmark(self, *args, **kwargs):
+        verbose = kwargs.get("verbose", False)
         os.makedirs("benchmark_input", exist_ok=True)
         export_in_colmap_format(self.dataset, "benchmark_input", binary=True)
 
@@ -35,6 +36,8 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             "benchmark_input",
             "benchmark_output",
         )
+        if verbose:
+            print(std_out)
         bundle_adjustment_report = _process_std_out(std_out)
         self_reported_time += bundle_adjustment_report.time
         measured_time += t

@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import os
 import shutil
 from datetime import datetime
@@ -18,6 +19,11 @@ def save_benchmarks(
     os.makedirs(benchmarks_path, exist_ok=True)
     for b in list_of_benchmarks:
         # Note: Default filename can lead to overrides e.g. when same benchmark class twice
+        if hasattr(b, "optimizer"):  # Hack
+            b_copy = copy.copy(b)
+            setattr(b_copy, "optimizer", None)
+            b = b_copy
+
         f = b.export_pickle(benchmarks_path)
         if override_latest:
             os.makedirs(latest_path, exist_ok=True)
