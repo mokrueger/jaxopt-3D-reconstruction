@@ -45,14 +45,16 @@ def pose_mat_to_vec(pose):
 
 
 @jax.jit
-def parse_intrinsics(intr_vec):
-    return jnp.array(
+def parse_intrinsics(params, cx_cy_skew):
+    # fmt: off
+    return jnp.array( 
         [
-            [intr_vec[0], intr_vec[4], intr_vec[2]],
-            [0, intr_vec[1], intr_vec[3]],
-            [0, 0, 1],
+            [params[0], cx_cy_skew[2], cx_cy_skew[0]],
+            [        0,     params[1], cx_cy_skew[1]],
+            [        0,             0,             1],
         ]
     )
+    # fmt: on
 
 
 @jax.jit
