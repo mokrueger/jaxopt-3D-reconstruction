@@ -11,7 +11,7 @@ from src.reconstruction.bundle_adjustment.utils import (
 
 from .loss import l2_loss
 
-jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", False)
 
 
 @jax.jit
