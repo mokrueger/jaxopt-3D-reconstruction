@@ -53,27 +53,37 @@ def _parse_output_params(param_list, dataset):
     return cameras
 
 
-def _parse_output_params_bundle(param_list, dataset, num_3d_points, num_cams,
-                                benchmark_index_to_point_identifier_mapping):
+def _parse_output_params_bundle(
+    param_list,
+    dataset,
+    cx_cy_skew,
+    num_3d_points,
+    num_cams,
+    benchmark_index_to_point_identifier_mapping,
+):
     # VERY BIG NOTE: If we don't use np.array(...) or float(...) we reference memory stored on the GPU
     # This will be "revived" if we get the values in the queue.get(), filling up the complete GPU memory again
 
     # Note: opt_params = jnp.concatenate([cam_params, intr_params, point_params])
     num_cam_params = 6
-    num_intr_params = 5
-    poses = param_list[:num_cams * num_cam_params].reshape((num_cams, num_cam_params))
-    intrinsics = param_list[num_cams * num_cam_params:num_cams * num_cam_params + num_cams * num_intr_params].reshape(
-        (num_cams, num_intr_params))
+    num_intr_params = 2
+    poses = param_list[: num_cams * num_cam_params].reshape((num_cams, num_cam_params))
+    intrinsics = param_list[
+        num_cams * num_cam_params : num_cams * num_cam_params
+        + num_cams * num_intr_params
+    ].reshape((num_cams, num_intr_params))
 
     """parse cameras"""
     cameras = {}
     for index in range(num_cams):
         pose = poses[index]
         intr = intrinsics[index]
+        intr_2 = cx_cy_skew[index]
         if any(np.isnan(np.concatenate([pose, intr]))):  # TODO: adjust this later
             raise Exception(
                 "NANANANANANANANANANANANANANANANANANANANANANANANA BATMAN (nan detected)"
             )
+
         old_camera = dataset.datasetEntries[index].camera
         new_camera_pose = CameraPose(
             rotation=Rotation.from_rotvec(np.array(pose[0:3])),
@@ -85,9 +95,9 @@ def _parse_output_params_bundle(param_list, dataset, num_3d_points, num_cams,
         new_intrinsics = params_to_intrinsics(
             fx=float(intr[0]),
             fy=float(intr[1]),
-            cx=float(intr[2]),
-            cy=float(intr[3]),
-            s=float(intr[4]),
+            cx=float(intr_2[0]),
+            cy=float(intr_2[1]),
+            s=float(intr_2[2]),
         )
         cameras.update(
             {
@@ -100,7 +110,9 @@ def _parse_output_params_bundle(param_list, dataset, num_3d_points, num_cams,
             }
         )
     """ parse points """
-    new_points = param_list[num_cams * num_cam_params + num_cams * num_intr_params:].reshape((num_3d_points, 3))
+    new_points = param_list[
+        num_cams * num_cam_params + num_cams * num_intr_params :
+    ].reshape((num_3d_points, 3))
     point_mapping = {}
     for index, point in enumerate(new_points):
         identifier = benchmark_index_to_point_identifier_mapping.get(index)
@@ -109,25 +121,25 @@ def _parse_output_params_bundle(param_list, dataset, num_3d_points, num_cams,
         # get new data
 
         # Note we need this mapping and cannot use point[0], point[1], ...; because it revives GPU memory
-        copied_point.x, copied_point.y, copied_point.z = list(map(float, np.array(point)))
+        copied_point.x, copied_point.y, copied_point.z = list(
+            map(float, np.array(point))
+        )
         copied_point.metadata.update({"note": "returned from bundle adjustment"})
-        point_mapping.update({
-            identifier: copied_point
-        })
+        point_mapping.update({identifier: copied_point})
     return cameras, point_mapping
 
 
 def plot_costs(
-        ax,
-        pose0,
-        pose1,
-        points,
-        observations,
-        intrinsics,
-        eps=0.1,
-        n=1000,
-        label0="",
-        label1="",
+    ax,
+    pose0,
+    pose1,
+    points,
+    observations,
+    intrinsics,
+    eps=0.1,
+    n=1000,
+    label0="",
+    label1="",
 ):
     """Plot cost function when interpolating between pose0 and pose1"""
     taus = np.linspace(-eps, 1 + eps, n)
@@ -141,7 +153,7 @@ def plot_costs(
     objective_values = []
     for tau in taus:
         p_int = Se3(
-            (p0.q ** (1 - tau) * p1.q ** tau).R,
+            (p0.q ** (1 - tau) * p1.q**tau).R,
             p0.t * (1 - tau) + p1.t * tau,
         )
 

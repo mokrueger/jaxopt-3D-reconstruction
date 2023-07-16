@@ -1,5 +1,3 @@
-from enum import Enum
-
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
@@ -17,16 +15,16 @@ jax.config.update("jax_enable_x64", True)
 
 
 @jax.jit
-def reproject_point(KE, point_2d, p3d_index, points_3d):
+def reproject_point(KE, point_2d, p3d_index, points_3d, mask):
     point_2d_projected = KE[:, :3] @ points_3d[p3d_index] + KE[:, 3]
     point_2d_projected = point_2d_projected[:2] / point_2d_projected[2:3]
-    return l2_loss(point_2d_projected, point_2d).sum()
+    return (l2_loss(point_2d_projected, point_2d) * mask).sum()
 
 
 reproject_points = jax.jit(
     jax.vmap(
-        jax.vmap(reproject_point, in_axes=(None, 0, 0, None)),
-        in_axes=(0, 0, 0, None),
+        jax.vmap(reproject_point, in_axes=(None, 0, 0, None, 0)),
+        in_axes=(0, 0, 0, None, 0),
     )
 )
 
@@ -36,6 +34,8 @@ class BundleAdjustment:
     def __init__(self, cam_num, avg_cam_width_sqr):
         self.cam_num = cam_num
         self.avg_cam_width_sqr = avg_cam_width_sqr
+        self.cam_end_index = self.cam_num * 6
+        self.intr_end_index = self.cam_end_index + self.cam_num * 2
 
     def tree_flatten(self):
         children = ()
@@ -50,22 +50,27 @@ class BundleAdjustment:
         return cls(*children, **aux_data)
 
     @jax.jit
-    def get_residuals(self, opt_params, points_2d_all, p3d_indices_all, cx_cy_skew):
-        cam_end_index = self.cam_num * 6
-        intr_end_index = cam_end_index + self.cam_num * 2
-
-        poses = parse_cam_pose_vmap(opt_params[:cam_end_index].reshape((-1, 6)))
-        points_3d = opt_params[intr_end_index:].reshape((-1, 3))
+    def get_residuals(
+        self,
+        opt_params,
+        points_2d_all,
+        p3d_indices_all,
+        cx_cy_skew,
+        masks_all,
+    ):
+        poses = parse_cam_pose_vmap(opt_params[: self.cam_end_index].reshape((-1, 6)))
+        points_3d = opt_params[self.intr_end_index :].reshape((-1, 3))
         intrinsics = parse_intrinsics_vmap(
-            opt_params[cam_end_index:intr_end_index].reshape((-1, 2)),
+            opt_params[self.cam_end_index : self.intr_end_index].reshape((-1, 2)),
             cx_cy_skew,
         )
 
         KE = jnp.einsum("bij,bjk->bik", intrinsics, poses)
 
-        print(self.cam_num, points_3d.shape, points_2d_all.shape, p3d_indices_all.shape)
+        error = reproject_points(
+            KE, points_2d_all, p3d_indices_all, points_3d, masks_all
+        )
 
-        error = reproject_points(KE, points_2d_all, p3d_indices_all, points_3d)
         return error.sum(axis=1) / self.avg_cam_width_sqr
 
 
@@ -102,26 +107,14 @@ class JaxBundleAdjustment:
         points_2d_all,
         p3d_indices_all,
         cx_cy_skew,
+        masks_all,
     ):
-        print(
-            opt_params.shape,
-            opt_params.dtype,
-            "\n",
-            points_2d_all.shape,
-            points_2d_all.dtype,
-            "\n",
-            p3d_indices_all.shape,
-            p3d_indices_all.dtype,
-            "\n",
-            cx_cy_skew.shape,
-            cx_cy_skew.dtype,
-            "\n",
-        )
         params, state = self.solver(
             opt_params,
             points_2d_all,
             p3d_indices_all,
             cx_cy_skew,
+            masks_all,
         )
         params = params.block_until_ready()
         return params, state
@@ -130,6 +123,7 @@ class JaxBundleAdjustment:
         self.optimize(
             jnp.zeros(self.cam_num * 8 + points_num * 3),
             jnp.zeros((self.cam_num, indices_num, 2)),
-            jnp.zeros((3, indices_num), dtype=int),
+            jnp.zeros((self.cam_num, indices_num), dtype=int),
             jnp.zeros((self.cam_num, 3)),
+            jnp.zeros((self.cam_num, indices_num)),
         )
