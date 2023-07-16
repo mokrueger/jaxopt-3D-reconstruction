@@ -1,26 +1,27 @@
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
-from pathlib import Path
-
 from PIL import Image
 
 from src.config import DATASETS_PATH
 from src.dataset.camera import Camera, CameraIntrinsics
+from src.dataset.camera_pose.camera_pose import CameraPose
+from src.dataset.camera_pose.enums_and_types import (CoordinateSystem,
+                                                     TransformationDirection)
 from src.dataset.dataset import Dataset
 from src.dataset.datasetEntry import DatasetEntry
 from src.dataset.imageMetadata import ImageMetadata
+from src.dataset.loaders.colmap_dataset_loader.cameras import (
+    CameraModelType, read_cameras_bin, read_cameras_txt)
+from src.dataset.loaders.colmap_dataset_loader.images import (read_images_bin,
+                                                              read_images_txt)
+from src.dataset.loaders.colmap_dataset_loader.points import (
+    read_points3d_bin, read_points3d_txt)
 from src.dataset.point import Point2D, Point3D
-
-from src.dataset.loaders.colmap_dataset_loader.cameras import read_cameras_bin, read_cameras_txt, CameraModelType
-from src.dataset.loaders.colmap_dataset_loader.images import read_images_bin, read_images_txt
-from src.dataset.loaders.colmap_dataset_loader.points import read_points3d_bin, read_points3d_txt
-
-from src.dataset.camera_pose.camera_pose import CameraPose
-from src.dataset.camera_pose.enums_and_types import CoordinateSystem, TransformationDirection
 
 
 def params_to_intrinsics(fx, fy, cx, cy, s=None):
@@ -150,9 +151,10 @@ def load_colmap_dataset(path_to_sparse_folder, path_to_images, binary=False, nam
 
 
 def export_in_colmap_format(ds: Dataset, output_path, binary=False):
-    from src.dataset.loaders.colmap_dataset_loader.read_write_model import Camera, BaseImage, Point3D, \
-        write_cameras_binary, write_points3D_binary, write_images_binary, write_cameras_text, write_points3D_text, \
-        write_images_text
+    from src.dataset.loaders.colmap_dataset_loader.read_write_model import (
+        BaseImage, Camera, Point3D, write_cameras_binary, write_cameras_text,
+        write_images_binary, write_images_text, write_points3D_binary,
+        write_points3D_text)
     cameras = []
     base_images = []
     points3D = []

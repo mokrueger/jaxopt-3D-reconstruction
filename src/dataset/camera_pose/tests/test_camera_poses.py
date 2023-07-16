@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
-
-from common.camera_poses import CameraPose, CoordinateSystem, CONVERSION_MATRIX
+from common.camera_poses import CONVERSION_MATRIX, CameraPose, CoordinateSystem
 
 
 def setup_camera_pose(func):

@@ -4,15 +4,23 @@ import gtsam
 import matplotlib.pyplot as plt
 import numpy as np
 import pycolmap
-
-from gtsam import (symbol_shorthand, SmartProjectionPose3Factor, Cal3_S2, LevenbergMarquardtOptimizer, Marginals,
-                   NonlinearFactorGraph, PinholeCameraCal3_S2, PriorFactorPose3, Values)
+from gtsam import (
+    Cal3_S2,
+    LevenbergMarquardtOptimizer,
+    Marginals,
+    NonlinearFactorGraph,
+    PinholeCameraCal3_S2,
+    PriorFactorPose3,
+    SmartProjectionPose3Factor,
+    Values,
+    symbol_shorthand,
+)
 from gtsam.examples import SFMdata
 from gtsam.utils import plot
 
 from src.config import DATASETS_PATH
-from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 from src.dataset.dataset import Dataset
+from src.dataset.loaders.colmap_dataset_loader.loader import load_colmap_dataset
 
 L = symbol_shorthand.L
 X = symbol_shorthand.X
@@ -21,7 +29,9 @@ X = symbol_shorthand.X
 def _prepare_dataset(dataset):  # TODO: Perhaps integrate into dataset
     mapping = {}
     for index, e in enumerate(dataset.datasetEntries):
-        mapping.update({index: e.map2d_3d(dataset.points3D_mapped, zipped=False, np=True)})
+        mapping.update(
+            {index: e.map2d_3d(dataset.points3D_mapped, zipped=False, np=True)}
+        )
     return mapping
 
 
@@ -32,13 +42,23 @@ def _prepare_cameras(dataset):  # TODO: Perhaps integrate into dataset
     return mapping
 
 
-def _prepare_gtsam_cameras(mapping_cameras, factor_graph):  # TODO: use refine_focal_length stuff
+def _prepare_gtsam_cameras(
+    mapping_cameras, factor_graph
+):  # TODO: use refine_focal_length stuff
     mapping = {}
     for image_id, c in list(mapping_cameras.items()):
         # Note: by default colmap uses focal length of 1.2*max(width, height) to start
-        colmap_camera = pycolmap.Camera(model="PINHOLE", width=c.width, height=c.height,  # TODO: could be radial with s
-                                        params=[c.camera_intrinsics.focal_x, c.camera_intrinsics.focal_y,
-                                                c.camera_intrinsics.center_x, c.camera_intrinsics.center_y])
+        colmap_camera = pycolmap.Camera(
+            model="PINHOLE",
+            width=c.width,
+            height=c.height,  # TODO: could be radial with s
+            params=[
+                c.camera_intrinsics.focal_x,
+                c.camera_intrinsics.focal_y,
+                c.camera_intrinsics.center_x,
+                c.camera_intrinsics.center_y,
+            ],
+        )
         mapping[image_id] = colmap_camera
     return mapping
 
@@ -103,7 +123,9 @@ def ttest():
 
     # Add a prior on pose x1. This indirectly specifies where the origin is.
     # 0.3 rad std on roll,pitch,yaw and 0.1m on x,y,z
-    pose_noise = gtsam.noiseModel.Diagonal.Sigmas(np.array([0.3, 0.3, 0.3, 0.1, 0.1, 0.1]))
+    pose_noise = gtsam.noiseModel.Diagonal.Sigmas(
+        np.array([0.3, 0.3, 0.3, 0.1, 0.1, 0.1])
+    )
     factor = PriorFactorPose3(X(0), poses[0], pose_noise)
     graph.push_back(factor)
     #   // Because the structure-from-motion problem has a scale ambiguity, the problem is
@@ -127,7 +149,7 @@ def ttest():
     #  point_noise = gtsam.noiseModel.Isotropic.Sigma(3, 0.1)
     #  factor = PriorFactorPoint3(L(0), points[0], point_noise)
     #  graph.push_back(factor)
-    graph.print('Factor Graph:\n')
+    graph.print("Factor Graph:\n")
 
     # Create the data structure to hold the initial estimate to the solution
     # Intentionally initialize the variables off from the ground truth
@@ -138,17 +160,17 @@ def ttest():
     #  for j, point in enumerate(points):
     #      transformed_point = point + 0.1 * np.random.randn(3)
     #      initial_estimate.insert(L(j), transformed_point)
-    initial_estimate.print('Initial Estimates:\n')
+    initial_estimate.print("Initial Estimates:\n")
 
     # Optimize the graph and print results
     params = gtsam.LevenbergMarquardtParams()
-    params.setVerbosity('TERMINATION')
+    params.setVerbosity("TERMINATION")
     optimizer = LevenbergMarquardtOptimizer(graph, initial_estimate, params)
-    print('Optimizing:')
+    print("Optimizing:")
     result = optimizer.optimize()
-    result.print('Final results:\n')
-    print('initial error = {}'.format(graph.error(initial_estimate)))
-    print('final error = {}'.format(graph.error(result)))
+    result.print("Final results:\n")
+    print("initial error = {}".format(graph.error(initial_estimate)))
+    print("final error = {}".format(graph.error(result)))
 
     marginals = Marginals(graph, result)
     plot.plot_3d_points(1, result, marginals=marginals)

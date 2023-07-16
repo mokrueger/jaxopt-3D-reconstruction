@@ -53,7 +53,9 @@ class PoseOptimization:
 
 
 class JaxPoseOptimizer:
-    def __init__(self, avg_cam_width, loss_fn: JaxLossFunction = JaxLossFunction.CAUCHY):
+    def __init__(
+        self, avg_cam_width, loss_fn: JaxLossFunction = JaxLossFunction.CAUCHY
+    ):
         self.po = PoseOptimization(avg_cam_width**2, loss_fn=loss_fn)
         self.optimizer, self.solver = self.create_lm_optimizer()
 

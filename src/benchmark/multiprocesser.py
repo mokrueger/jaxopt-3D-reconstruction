@@ -1,6 +1,6 @@
 import os
 import time
-from multiprocessing import Process, Manager, cpu_count
+from multiprocessing import Manager, Process, cpu_count
 
 
 class ListMultiProcessor:
@@ -11,7 +11,9 @@ class ListMultiProcessor:
 
     def __init__(self, input_list, function, num_threads=cpu_count(), verbose=True):
         self.verbose = verbose
-        self.input_list = input_list if not self.verbose else list(enumerate(input_list, start=1))
+        self.input_list = (
+            input_list if not self.verbose else list(enumerate(input_list, start=1))
+        )
         self.function = function
         self.num_threads = num_threads
 
@@ -30,14 +32,30 @@ class ListMultiProcessor:
 
         if verbose:  # Verbose case
             print(f"Process: {os.getpid()} starting.", flush=True)
-            while index_element := _pop(input):  # Note: Walrus operator (:=) requires Python >= 3.8
+            while index_element := _pop(
+                input
+            ):  # Note: Walrus operator (:=) requires Python >= 3.8
                 i, element = index_element
                 output.append(self.function(element))
-                if initial_length and i % (int(initial_length * 0.1) if (int(initial_length * 0.1)) > 0 else 1) == 0:
-                    print(f"Process: {os.getpid()} reached {int(i / initial_length * 100)}%", flush=True)
+                if (
+                    initial_length
+                    and i
+                    % (
+                        int(initial_length * 0.1)
+                        if (int(initial_length * 0.1)) > 0
+                        else 1
+                    )
+                    == 0
+                ):
+                    print(
+                        f"Process: {os.getpid()} reached {int(i / initial_length * 100)}%",
+                        flush=True,
+                    )
             print(f"Process: {os.getpid()} finished.", flush=True)
         else:
-            while element := _pop(input):  # Note: Walrus operator (:=) requires Python >= 3.8
+            while element := _pop(
+                input
+            ):  # Note: Walrus operator (:=) requires Python >= 3.8
                 output.append(self.function(element))
 
     def process(self):
@@ -49,7 +67,10 @@ class ListMultiProcessor:
 
             pr = []
             for _ in range(self.num_threads):
-                p = Process(target=self._process, args=(INPUT, OUTPUT, self.verbose, len(self.input_list)))
+                p = Process(
+                    target=self._process,
+                    args=(INPUT, OUTPUT, self.verbose, len(self.input_list)),
+                )
                 p.start()
                 pr.append(p)
             for pp in pr:

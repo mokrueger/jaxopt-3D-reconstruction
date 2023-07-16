@@ -9,10 +9,13 @@ from scipy import linalg
 from scipy.spatial.transform.rotation import Rotation
 
 from src.dataset.camera_pose.constants import CONVERSION_MATRIX
-from src.dataset.camera_pose.enums_and_types import TransformationDirection, CoordinateSystem, PoseFormat
+from src.dataset.camera_pose.enums_and_types import (CoordinateSystem,
+                                                     PoseFormat,
+                                                     TransformationDirection)
 from src.dataset.camera_pose.exceptions import InvalidInputFormatErr
-from src.dataset.camera_pose.helpers import _print_2d_matrix_formatted, parse_metadata, _opposite, \
-    create_metadata
+from src.dataset.camera_pose.helpers import (_opposite,
+                                             _print_2d_matrix_formatted,
+                                             create_metadata, parse_metadata)
 
 
 def _raise_invalid_input_err_on_exception(func: Callable[..., "CameraPose"]):

@@ -1,6 +1,6 @@
 import os
-import sqlite3
 import random
+import sqlite3
 from pathlib import Path
 from typing import Callable, List, Union
 
@@ -8,8 +8,12 @@ import numpy as np
 from scipy import linalg
 
 from src.dataset.camera_pose.camera_pose import CameraPose
-from src.dataset.camera_pose.enums_and_types import TransformationDirection, CoordinateSystem, PoseFormat
-from src.dataset.camera_pose.exceptions import InvalidInputFormatErr, NonMatchingIdentifiersErr, NotEnoughCameraPosesErr
+from src.dataset.camera_pose.enums_and_types import (CoordinateSystem,
+                                                     PoseFormat,
+                                                     TransformationDirection)
+from src.dataset.camera_pose.exceptions import (InvalidInputFormatErr,
+                                                NonMatchingIdentifiersErr,
+                                                NotEnoughCameraPosesErr)
 
 
 def _raise_invalid_input_err_on_exception(func: Callable[..., "CameraPose"]):

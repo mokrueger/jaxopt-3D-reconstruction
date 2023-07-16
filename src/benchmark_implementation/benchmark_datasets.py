@@ -34,31 +34,43 @@ REICHSTAG_IMAGES = os.path.join(DATASETS_PATH, "reichstag/images")
 SACRE_COEUR_SPARSE_NOISED = os.path.join(DATASETS_PATH, "sacre_coeur/sparse_noised")
 SACRE_COEUR_IMAGES = os.path.join(DATASETS_PATH, "sacre_coeur/images")
 
-ST_PETERS_SQUARE_SPARSE_NOISED = os.path.join(DATASETS_PATH, "st_peters_square/sparse_noised")
+ST_PETERS_SQUARE_SPARSE_NOISED = os.path.join(
+    DATASETS_PATH, "st_peters_square/sparse_noised"
+)
 ST_PETERS_SQUARE_IMAGES = os.path.join(DATASETS_PATH, "st_peters_square/images")
 
 """ Dataset Config Definitions """
-REICHSTAG_NOISED_CONFIG = DatasetConfig(sparse_folder=REICHSTAG_SPARSE_NOISED,
-                                        images_folder=REICHSTAG_IMAGES,
-                                        binary=True,
-                                        name="Reichstag")
-REICHSTAG_GT_CONFIG = DatasetConfig(sparse_folder=REICHSTAG_SPARSE,
-                                    images_folder=REICHSTAG_IMAGES,
-                                    binary=True,
-                                    name="Reichstag")
-SACRE_COEUR_NOISED_CONFIG = DatasetConfig(sparse_folder=SACRE_COEUR_SPARSE_NOISED,
-                                          images_folder=SACRE_COEUR_IMAGES,
-                                          binary=True,
-                                          name="Sacre Coeur")
-ST_PETERS_NOISED_CONFIG = DatasetConfig(sparse_folder=ST_PETERS_SQUARE_SPARSE_NOISED,
-                                        images_folder=ST_PETERS_SQUARE_IMAGES,
-                                        binary=True,
-                                        name="St Peters Square")
+REICHSTAG_NOISED_CONFIG = DatasetConfig(
+    sparse_folder=REICHSTAG_SPARSE_NOISED,
+    images_folder=REICHSTAG_IMAGES,
+    binary=True,
+    name="Reichstag",
+)
+REICHSTAG_GT_CONFIG = DatasetConfig(
+    sparse_folder=REICHSTAG_SPARSE,
+    images_folder=REICHSTAG_IMAGES,
+    binary=True,
+    name="Reichstag",
+)
+SACRE_COEUR_NOISED_CONFIG = DatasetConfig(
+    sparse_folder=SACRE_COEUR_SPARSE_NOISED,
+    images_folder=SACRE_COEUR_IMAGES,
+    binary=True,
+    name="Sacre Coeur",
+)
+ST_PETERS_NOISED_CONFIG = DatasetConfig(
+    sparse_folder=ST_PETERS_SQUARE_SPARSE_NOISED,
+    images_folder=ST_PETERS_SQUARE_IMAGES,
+    binary=True,
+    name="St Peters Square",
+)
 
 
 def partial_loader(sparse_folder, images_folder, binary, name):
-    """ returns a partial function that loads the dataset """
-    return partial(load_colmap_dataset, sparse_folder, images_folder, binary=binary, name=name)
+    """returns a partial function that loads the dataset"""
+    return partial(
+        load_colmap_dataset, sparse_folder, images_folder, binary=binary, name=name
+    )
 
 
 """ PARTIAL LOADERS """

@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass
-from typing import Union, Tuple
+from typing import Tuple, Union
 from warnings import warn
 
 import numpy as np

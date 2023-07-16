@@ -8,7 +8,9 @@ from typing import List
 from src.benchmark.benchmark import Benchmark
 
 
-def save_benchmarks(list_of_benchmarks: List[Benchmark], parent_dir, override_latest=True):
+def save_benchmarks(
+    list_of_benchmarks: List[Benchmark], parent_dir, override_latest=True
+):
     current_time_formatted = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     benchmarks_path = os.path.join(parent_dir, current_time_formatted)
     latest_path = os.path.join(parent_dir, "latest")

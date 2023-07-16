@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import Dict, List
 
 from src.dataset.camera import Camera
 from src.dataset.imageMetadata import ImageMetadata

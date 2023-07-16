@@ -9,6 +9,7 @@ class OutputGrabber(object):
     Class used to grab standard output or another stream.
     From: https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
     """
+
     escape_char = "\b"
 
     def __init__(self, stream=None, threaded=False):

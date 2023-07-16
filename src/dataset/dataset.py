@@ -2,20 +2,19 @@ import copy
 import os
 import shutil
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import List, Dict, Optional
 from functools import partial
-from typing import List, Dict, Optional
+from pathlib import Path
+from typing import Dict, List, Optional
 from uuid import uuid4
 from warnings import warn
 
-from src.benchmark.multiprocesser import ListMultiProcessor
-from src.dataset import np  # For the seed and reproducibility
 from scipy.spatial.transform import Rotation
 
+from src.benchmark.multiprocesser import ListMultiProcessor
+from src.dataset import np  # For the seed and reproducibility
 from src.dataset.datasetEntry import DatasetEntry
 from src.dataset.loss_functions import LossFunction
-from src.dataset.point import Point3D, Point2D
+from src.dataset.point import Point2D, Point3D
 
 
 @dataclass

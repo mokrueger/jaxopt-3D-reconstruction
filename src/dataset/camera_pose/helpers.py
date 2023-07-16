@@ -1,8 +1,9 @@
 import os
 from enum import Enum
 
-from src.dataset.camera_pose.enums_and_types import TransformationDirection, PoseFormat, \
-    CoordinateSystem
+from src.dataset.camera_pose.enums_and_types import (CoordinateSystem,
+                                                     PoseFormat,
+                                                     TransformationDirection)
 from src.dataset.camera_pose.exceptions import InvalidInputFormatErr
 
 

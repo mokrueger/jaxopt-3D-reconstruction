@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import List, Union
 
 from src.config import DATASETS_PATH
-from src.dataset.loaders.colmap_dataset_loader.read_write_model import read_images_text
+from src.dataset.loaders.colmap_dataset_loader.read_write_model import \
+    read_images_text
 
 
 @dataclass

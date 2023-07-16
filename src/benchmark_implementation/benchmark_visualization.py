@@ -11,10 +11,15 @@ from src.dataset.loss_functions import LossFunction
 
 def save_reprojection_error_histogram(list_of_benchmarks):
     os.makedirs("../benchmark/evaluation", exist_ok=True)
-    os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
+    os.makedirs(
+        f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}",
+        exist_ok=True,
+    )
     reprojection_errors = []
     for benchmark in list_of_benchmarks:
-        reprojection_error = benchmark.reprojection_errors(loss_function=LossFunction.CAUCHY_LOSS)
+        reprojection_error = benchmark.reprojection_errors(
+            loss_function=LossFunction.CAUCHY_LOSS
+        )
         reprojection_errors.append(reprojection_error)
 
     fig: plt.Figure
@@ -40,7 +45,7 @@ def save_reprojection_error_histogram(list_of_benchmarks):
         # plt.text(re.mean() * 1.1, max_ylim * 0.9, 'Mean: {:.2f}'.format(re.mean()))
     ax.set_xlabel(f"Squared reprojection error")
     ax.set_ylabel("Count")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
@@ -52,7 +57,10 @@ def save_reprojection_error_histogram(list_of_benchmarks):
 
 def save_runtime_plot(list_of_benchmarks):
     os.makedirs("../benchmark/evaluation", exist_ok=True)
-    os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
+    os.makedirs(
+        f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}",
+        exist_ok=True,
+    )
 
     fig: plt.Figure
     ax: plt.Axes
@@ -79,11 +87,14 @@ def save_runtime_plot(list_of_benchmarks):
     fig, ax = plt.subplots()
     num_cams = len(list_of_benchmarks[0].dataset.datasetEntries)
     names = list(map(lambda b: f"{b.FRAMEWORK}", list_of_benchmarks))
-    ax.bar(names, list(map(lambda b: np.sum(b.single_times) / num_cams, list_of_benchmarks)))
+    ax.bar(
+        names,
+        list(map(lambda b: np.sum(b.single_times) / num_cams, list_of_benchmarks)),
+    )
 
     ax.set_xlabel(f"Frameworks")
     ax.set_ylabel("Mean execution time per camera in s")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
@@ -123,15 +134,17 @@ def save_runtime_plot(list_of_benchmarks):
         names,
         list(
             map(
-                lambda b: np.sum(b.single_times) / num_cams if type(b.time) == float else np.sum(b.time[1]) / num_cams,
-                list_of_benchmarks
+                lambda b: np.sum(b.single_times) / num_cams
+                if type(b.time) == float
+                else np.sum(b.time[1]) / num_cams,
+                list_of_benchmarks,
             )
-        )
+        ),
     )
 
     ax.set_xlabel(f"Frameworks")
     ax.set_ylabel("Mean execution time per camera in s")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
@@ -148,14 +161,25 @@ def save_scatter_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
     for index, b in enumerate(list_of_benchmarks):
         # This has to be adjusted according to JAX
         optimization_time = b.single_times if type(b.time) == float else b.time[1]
-        num_3d_points = list(map(lambda dse: dse.num_3d_points, b.dataset.datasetEntries))
+        num_3d_points = list(
+            map(lambda dse: dse.num_3d_points, b.dataset.datasetEntries)
+        )
         a, _b = np.polyfit(num_3d_points, optimization_time, 1)
-        ax.scatter(x=num_3d_points, y=optimization_time, alpha=1 / len(list_of_benchmarks), label=b.FRAMEWORK)
-        ax.plot(num_3d_points, a * np.array(num_3d_points) + _b, alpha=1 / len(list_of_benchmarks))
+        ax.scatter(
+            x=num_3d_points,
+            y=optimization_time,
+            alpha=1 / len(list_of_benchmarks),
+            label=b.FRAMEWORK,
+        )
+        ax.plot(
+            num_3d_points,
+            a * np.array(num_3d_points) + _b,
+            alpha=1 / len(list_of_benchmarks),
+        )
 
     ax.set_xlabel(f"Number of 2d-3d correspondences")
     ax.set_ylabel("Optimization time in s")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
@@ -167,7 +191,10 @@ def save_scatter_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
 
 def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
     os.makedirs("../benchmark/evaluation", exist_ok=True)
-    os.makedirs(f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}", exist_ok=True)
+    os.makedirs(
+        f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}",
+        exist_ok=True,
+    )
 
     fig: plt.Figure
     ax: plt.Axes
@@ -180,7 +207,7 @@ def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
 
     ax.set_xlabel(f"Frameworks")
     ax.set_ylabel("Mean number of iterations time per camera")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
@@ -194,11 +221,15 @@ def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
     ax: plt.Axes
     fig, ax = plt.subplots()
     cams = list(range(len(list_of_benchmarks[0].dataset.datasetEntries)))
-    for index, b in enumerate(list_of_benchmarks):  # Note this does not work if batch_size != 1 for now
-        ax.bar(np.array(cams) + 0.25 * index, b.iterations, label=b.FRAMEWORK, width=0.25)
+    for index, b in enumerate(
+        list_of_benchmarks
+    ):  # Note this does not work if batch_size != 1 for now
+        ax.bar(
+            np.array(cams) + 0.25 * index, b.iterations, label=b.FRAMEWORK, width=0.25
+        )
     ax.set_xlabel(f"Cameras")
     ax.set_ylabel("Number of iterations")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
@@ -216,14 +247,18 @@ def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
     unique = set(iterations_total)
     hist_data = np.histogram(np.array(iterations_total), bins=len(unique))
     for b in list_of_benchmarks:
-        ax.hist(b.iterations, bins=hist_data[1], alpha=1 / len(list_of_benchmarks),
-                label=b.FRAMEWORK + f" (Median: {np.median(b.iterations)})")
+        ax.hist(
+            b.iterations,
+            bins=hist_data[1],
+            alpha=1 / len(list_of_benchmarks),
+            label=b.FRAMEWORK + f" (Median: {np.median(b.iterations)})",
+        )
         # ax.axvline(re.mean(), color='k', linestyle='dashed', linewidth=1)
         # min_ylim, max_ylim = ax.get_ylim()
         # plt.text(re.mean() * 1.1, max_ylim * 0.9, 'Mean: {:.2f}'.format(re.mean()))
     ax.set_xlabel(f"Number of iterations")
     ax.set_ylabel("Count")
-    ax.legend(loc='upper right')
+    ax.legend(loc="upper right")
     ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
 
     fig.savefig(
