@@ -23,31 +23,27 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
 
     def __init__(self, dataset: Dataset):
         super().__init__(dataset)
-
-        self.points_limit = 4000
-        self.camera_limit = 10
-
-        (
-            self.points_2d_all,
-            self.points_3d_all,
-            self.p3d_indices_all,
-            self.masks_all,
-            self.cam_poses,
-            self.intrinsics,
-            self.benchmark_index_to_point_identifier_mapping,
-            self.avg_cam_width,
-        ) = self._prepare_dataset()
-
-        self.points_2d_all_gpu = to_gpu(self.points_2d_all)
-        self.p3d_indices_all_gpu = to_gpu(self.p3d_indices_all)
-        self.masks_all_gpu = to_gpu(self.masks_all)
-
-        self.optimizer = JaxBundleAdjustment(len(self.cam_poses), self.avg_cam_width)
+        (self.points_limit,
+         self.camera_limit,
+         self.points_2d_all,
+         self.points_3d_all,
+         self.p3d_indices_all,
+         self.masks_all,
+         self.cam_poses,
+         self.intrinsics,
+         self.benchmark_index_to_point_identifier_mapping,
+         self.avg_cam_width,
+         self.points_2d_all_gpu,
+         self.p3d_indices_all_gpu,
+         self.masks_all_gpu,
+         self.optimizer,
+         ) = None, None, None, None, None, None, None, None, None, None, None, None, None, None
 
     def __len__(self):
         return len(self.cam_poses)
 
     def _prepare_dataset(self):
+        dataset = self.dataset.make_reduced_dataset(camera_limit=self.camera_limit, points_limit=self.points_limit)
         cam_poses = []
         intrinsics = []
 
@@ -59,12 +55,12 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         p3d = {}
 
         avg_cam_width = 0
-        for d_entry in self.dataset.datasetEntries[: self.camera_limit]:
+        for d_entry in dataset.datasetEntries:
             avg_cam_width += d_entry.camera.width
             cam_poses.append(d_entry.camera.camera_pose.rotation_translation_matrix)
             intrinsics.append(d_entry.camera.camera_intrinsics.camera_intrinsics_matrix)
             map_2d_3d_list.append(
-                d_entry.map2d_3d(self.dataset.points3D_mapped)[: self.points_limit]
+                d_entry.map2d_3d(dataset.points3D_mapped)
             )
             p3d.update({p3.identifier: p3.xyz for _, p3 in map_2d_3d_list[-1]})
 
@@ -88,7 +84,7 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             masks_all.append([1.0] * len(points_2d) + [0.0] * pad_len)
 
         avg_cam_width /= len(cam_poses)
-        
+
         cam_poses = np.array(cam_poses)
         intrinsics = np.array(intrinsics)
         p3d_indices_all = np.array(p3d_indices_all)
@@ -109,6 +105,27 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
             avg_cam_width,
         )
 
+    def setup(self, points_limit, camera_limit):
+        self.points_limit = points_limit
+        self.camera_limit = camera_limit
+
+        (
+            self.points_2d_all,
+            self.points_3d_all,
+            self.p3d_indices_all,
+            self.masks_all,
+            self.cam_poses,
+            self.intrinsics,
+            self.benchmark_index_to_point_identifier_mapping,
+            self.avg_cam_width,
+        ) = self._prepare_dataset()
+
+        self.points_2d_all_gpu = to_gpu(self.points_2d_all)
+        self.p3d_indices_all_gpu = to_gpu(self.p3d_indices_all)
+        self.masks_all_gpu = to_gpu(self.masks_all)
+
+        self.optimizer = JaxBundleAdjustment(len(self.cam_poses), self.avg_cam_width)
+
     def compile(self) -> None:
         self.optimizer.compile(
             len(self.points_3d_all), len(self.p3d_indices_all[0])
@@ -124,7 +141,18 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         )
 
     def benchmark(self, *args, **kwargs):
+        """
+        @type verbose: bool; specify verbosity
+        @type camera_limit: int; specify for reduced dataset
+        @type points_limit: int; specify for reduced dataset
+        """
         verbose = kwargs.get("verbose", False)
+
+        # No defaults; will raise errors if not set
+        camera_limit = kwargs["camera_limit"]
+        points_limit = kwargs["points_limit"]
+        self.setup(camera_limit=camera_limit, points_limit=points_limit)
+
         initial_intrinsics = np.array(
             [
                 [intr[0, 0], intr[1, 1], intr[0, 2], intr[1, 2], intr[0, 1]]

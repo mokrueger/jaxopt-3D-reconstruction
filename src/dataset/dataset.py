@@ -1,11 +1,9 @@
 import copy
-import os
-import shutil
+from collections import Counter
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional
-from uuid import uuid4
 from warnings import warn
 
 from scipy.spatial.transform import Rotation
@@ -170,3 +168,36 @@ class Dataset:
                 camera=copy.deepcopy(de.camera)
             ), self.datasetEntries))
         )
+
+    def make_reduced_dataset(self, camera_limit, points_limit, min_track_length=2):
+        """ WARNING: THIS RETURNS A SHALLOW COPY. MOST OBJECT REFERENCE STUFF IN THE ORIGINAL DATASET """
+        shallow_dataset = copy.copy(self)
+        shallow_dataset.datasetEntries = [copy.copy(de) for de in self.datasetEntries[: camera_limit]]
+        points_3D_by_camera_limit_times_cameras_sorted = sorted(
+            list(Counter([p3d for d_entry in shallow_dataset.datasetEntries for p2d, p3d in
+                          d_entry.map2d_3d(self.points3D_mapped)[: points_limit]]).items())
+            , key=lambda x: x[1]
+        )
+        shallow_dataset.points3D = [x[0] for x in points_3D_by_camera_limit_times_cameras_sorted if
+                                    x[1] >= min_track_length]
+        point3D_ids = [p.identifier for p in shallow_dataset.points3D]
+        # shallow_dataset.points3D = [p3d for d_entry in shallow_dataset.datasetEntries for p2d, p3d in
+        #                             d_entry.map2d_3d(dataset.points3D_mapped)[: points_limit]]
+
+        shallow_dataset.refresh_mapping()
+
+        for de in shallow_dataset.datasetEntries:
+            point_ids_we_want = [p.identifier for p in de.points_with_3d()[: points_limit]
+                                 if p.point3D_identifier in point3D_ids]
+
+            # Shallow copy of list
+            de.points2D = copy.copy(de.points2D)
+            for i in range(len(de.points2D)):
+                if de.points2D[i].identifier not in point_ids_we_want:
+                    point_copy = copy.deepcopy(de.points2D[i])
+                    point_copy.point3D_identifier = None
+                    # Note: the list is a new object, created by copy.copy(...)
+                    de.points2D[i] = point_copy
+            de.refresh_mapping()
+
+        return shallow_dataset

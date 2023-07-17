@@ -58,3 +58,14 @@ class Point3D:
         new = copy.deepcopy(self)
         new.translate_np(xyz)
         return new
+
+    def __key(self):
+        return self.x, self.y, self.z, self.identifier, str(self.metadata)
+
+    def __hash__(self):
+        return hash(self.__key())
+
+    def __eq__(self, other):
+        if isinstance(other, Point3D):
+            return self.__key() == other.__key()
+        return NotImplemented

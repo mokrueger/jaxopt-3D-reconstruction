@@ -46,9 +46,9 @@ class Benchmark(ABC):
         os.makedirs(full_path_to_folder, exist_ok=True)
         if not filename:
             filename = (
-                self.__class__.__name__
-                + f"_{self.dataset.name.replace(' ', '_')}"
-                + ".pkl"
+                    self.__class__.__name__
+                    + f"_{self.dataset.name.replace(' ', '_')}"
+                    + ".pkl"
             )
         full_filename = os.path.abspath(os.path.join(full_path_to_folder, filename))
         with open(full_filename, "wb") as f:
@@ -109,10 +109,10 @@ class SinglePoseBenchmark(Benchmark, ABC):
         raise AttributeError
 
     def subprocess_benchmark(
-        self,
-        benchmark_function_name="benchmark",
-        *args,
-        **kwargs,
+            self,
+            benchmark_function_name="benchmark",
+            *args,
+            **kwargs,
     ):
         """
         Args:
@@ -122,7 +122,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
         """
 
         def execute_subprocess_benchmark(
-            dataset, queue: multiprocessing.Queue, function_name: str, *ar, **kw
+                dataset, queue: multiprocessing.Queue, function_name: str, *ar, **kw
         ):
             subprocess_benchmark_class = self.__class__(copy.copy(dataset))
             benchmark_function = getattr(subprocess_benchmark_class, function_name)
@@ -149,7 +149,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
         item_count = 0
         items = []
         while (
-            item_count != 4
+                item_count != 4
         ):  # We do this because join does not work when putting large objects in queue.
             if q.empty():
                 time.sleep(5)
@@ -167,7 +167,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
         self._iterations = copy.deepcopy(items[3])
 
     def shallow_results_dataset(
-        self,
+            self,
     ):  # Note: everything (excluding cameras) points to the original dataset(!!)
         if self._results:
             copied_dataset = copy.copy(
@@ -184,7 +184,7 @@ class SinglePoseBenchmark(Benchmark, ABC):
         raise AttributeError
 
     def export_results_in_colmap_format(
-        self, output_path="export_results/" + str(uuid4()), open_in_colmap=False
+            self, output_path="export_results/" + str(uuid4()), open_in_colmap=False
     ):
         os.makedirs(output_path, exist_ok=True)
         shallow_results_dataset = self.shallow_results_dataset()
@@ -288,8 +288,8 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
 
             """for reduced datasets only for testing"""
             copied_dataset.datasetEntries = copied_dataset.datasetEntries[
-                0 : len(self._results.camera_mapping)
-            ]
+                                            0: len(self._results.camera_mapping)
+                                            ]
 
             for index, de in enumerate(copied_dataset.datasetEntries):
                 if prior_point_length != posterior_point_length:
@@ -313,10 +313,10 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         raise AttributeError
 
     def subprocess_benchmark(
-        self,
-        benchmark_function_name="benchmark",
-        *args,
-        **kwargs,
+            self,
+            benchmark_function_name="benchmark",
+            *args,
+            **kwargs,
     ):
         """
         Args:
@@ -326,7 +326,7 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         """
 
         def execute_subprocess_benchmark(
-            dataset, queue: multiprocessing.Queue, function_name: str, *ar, **kw
+                dataset, queue: multiprocessing.Queue, function_name: str, *ar, **kw
         ):
             subprocess_benchmark_class = self.__class__(copy.copy(dataset))
             benchmark_function = getattr(subprocess_benchmark_class, function_name)
@@ -352,7 +352,7 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         item_count = 0
         items = []
         while (
-            item_count != 3
+                item_count != 3
         ):  # We do this because join does not work when putting large objects in queue.
             if q.empty():
                 time.sleep(5)
@@ -368,23 +368,20 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         self._time = copy.deepcopy(items[1])
         self._iterations = copy.deepcopy(items[2])
 
-    def shallow_results_dataset(self):
+    def shallow_results_dataset(self, point_limit=-1, only_trimmed_2d_points=False):
         # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
+        # Shallow copy(!) is enough to export, but be really careful here
+        copied_dataset = copy.copy(self.dataset)
         if self._results:
-            copied_dataset = copy.copy(
-                self.dataset
-            )  # Shallow copy(!) is enough to export, but be really careful here
 
             copied_dataset.datasetEntries = list(
                 map(lambda x: copy.copy(x), copy.copy(copied_dataset.datasetEntries))
             )
 
-            prior_point_length = len(copied_dataset.points3D)
             copied_dataset.points3D = list(self._results.point_mapping.values())
             copied_dataset.refresh_mapping()
-            posterior_point_length = len(copied_dataset.points3D)
 
-            if prior_point_length != posterior_point_length:
+            if point_limit != -1:
                 """for reduced datasets only for testing"""
                 copied_dataset.datasetEntries = copied_dataset.datasetEntries[
                     0 : len(self._results.camera_mapping)
@@ -395,22 +392,40 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
             for index, de in enumerate(copied_dataset.datasetEntries):
                 de.camera = camera_mapping.get(index)
                 """For reduced datasets (for our test) we modify point2D identifiers"""
-                if prior_point_length != posterior_point_length:
-                    de.points2D = copy.copy(
-                        de.points2D
-                    )  # Replace by shallow copy, points are still -> orig. dataset
-                    for index in range(len(de.points2D)):  # this is slow as fk
-                        try:
-                            copied_dataset.points3D_mapped[
-                                de.points2D[index].point3D_identifier
-                            ]
-                        except KeyError:
-                            # Point got lost due to reduced dataset for debug test
-                            mod_point = copy.deepcopy(de.points2D[index])
-                            mod_point.point3D_identifier = None
-                            de.points2D[
-                                index
-                            ] = mod_point  # Note: the list is a new object, created by copy.copy(...)
+                if point_limit != -1:
+                    # Replace list by shallow copy, points are still -> orig. dataset
+                    de.points2D = copy.copy(de.points2D)
+                    if only_trimmed_2d_points:
+                        """ We remove all p3d identifiers from points who were not used in the optimization """
+                        ids_of_reduced_set_of_points = [p.identifier for p in de.points_with_3d()[:point_limit]]
+                        for i in range(len(de.points2D)):
+                            if de.points2D[i].identifier not in ids_of_reduced_set_of_points:
+                                # Point got lost due to reduced dataset for debug test
+                                mod_point = copy.deepcopy(de.points2D[i])
+                                mod_point.point3D_identifier = None
+                                # Note: the list is a new object, created by copy.copy(...)
+                                de.points2D[i] = mod_point
+                            else:
+                                identifier = de.points2D[i].point3D_identifier
+                                if identifier and not copied_dataset.points3D_mapped.get(identifier):
+                                    # Point got lost due to reduced dataset for debug test
+                                    mod_point = copy.deepcopy(de.points2D[i])
+                                    mod_point.point3D_identifier = None
+                                    # Note: the list is a new object, created by copy.copy(...)
+                                    de.points2D[i] = mod_point
+
+                    else:
+                        """ We keep all p3d identifiers from p2d as long as they had a p3d used in the optimization """
+                        for i in range(len(de.points2D)):
+                            if de.points2D[i].point3D_identifier:
+                                try:
+                                    copied_dataset.points3D_mapped[de.points2D[i].point3D_identifier]
+                                except KeyError:
+                                    # Point got lost due to reduced dataset for debug test
+                                    mod_point = copy.deepcopy(de.points2D[i])
+                                    mod_point.point3D_identifier = None
+                                    # Note: the list is a new object, created by copy.copy(...)
+                                    de.points2D[i] = mod_point
                 """end"""
 
             copied_dataset.refresh_mapping()
@@ -434,11 +449,11 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         raise AttributeError
 
     def export_results_in_colmap_format(
-        self, output_path="export_results/" + str(uuid4()), open_in_colmap=False
+            self, points_limit=-1, output_path="export_results/" + str(uuid4()), open_in_colmap=False
     ):
         # TODO: note: copied from above, can be refactored into benchmark class
         os.makedirs(output_path, exist_ok=True)
-        shallow_results_dataset = self.shallow_results_dataset()
+        shallow_results_dataset = self.shallow_results_dataset(point_limit=points_limit)
         export_in_colmap_format(shallow_results_dataset, output_path, binary=True)
         if open_in_colmap:
             show_in_colmap(

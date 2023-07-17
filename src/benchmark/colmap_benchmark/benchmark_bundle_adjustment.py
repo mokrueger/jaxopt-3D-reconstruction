@@ -25,9 +25,22 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
     FRAMEWORK = "Colmap"
 
     def benchmark(self, *args, **kwargs):
+        """
+        @type verbose: bool; specify verbosity
+        @type camera_limit: int; specify for reduced dataset
+        @type points_limit: int; specify for reduced dataset
+        """
         verbose = kwargs.get("verbose", False)
+        camera_limit = kwargs.get("camera_limit", -1)
+        points_limit = kwargs.get("points_limit", -1)
         os.makedirs("benchmark_input", exist_ok=True)
-        export_in_colmap_format(self.dataset, "benchmark_input", binary=True)
+
+        dataset = self.dataset if camera_limit == -1 and points_limit == -1 else \
+            self.dataset.make_reduced_dataset(
+                camera_limit=camera_limit,
+                points_limit=points_limit
+            )
+        export_in_colmap_format(dataset, "benchmark_input", binary=True)
 
         self_reported_time = 0.0
         measured_time = 0.0

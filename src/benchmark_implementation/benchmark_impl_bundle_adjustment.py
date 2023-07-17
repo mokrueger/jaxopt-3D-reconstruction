@@ -25,11 +25,14 @@ from src.dataset.loss_functions import LossFunction
 
 
 def benchmark_bundle_adjustment(dataset):
+    points_limit = 400
+    camera_limit = 15
+
     jaxopt_benchmark = JaxoptBundleAdjustmentBenchmark(dataset)
-    jaxopt_benchmark.benchmark()
+    jaxopt_benchmark.benchmark(points_limit=points_limit, camera_limit=camera_limit)
 
     colmap_benchmark = ColmapBundleAdjustmentBenchmark(dataset)
-    colmap_benchmark.benchmark()
+    colmap_benchmark.benchmark(verbose=True, points_limit=points_limit, camera_limit=camera_limit)
 
     gtsam_benchmark = GtsamBundleAdjustmentBenchmark(dataset)
     gtsam_benchmark.benchmark()
@@ -38,17 +41,18 @@ def benchmark_bundle_adjustment(dataset):
     import numpy as np
 
     jds_errors = (
-        jaxopt_benchmark.shallow_results_dataset().compute_reprojection_errors_alt(
+        jaxopt_benchmark.shallow_results_dataset(
+            point_limit=jaxopt_benchmark.points_limit,
+            only_trimmed_2d_points=True
+        ).compute_reprojection_errors_alt(
             LossFunction.TRIVIAL_LOSS
         )
     )
-    cds_errors = {
-        k: v
-        for k, v in colmap_benchmark.shallow_results_dataset()
-        .compute_reprojection_errors_alt(LossFunction.TRIVIAL_LOSS)
-        .items()
-        if k in jds_errors.keys()
-    }
+    cds_errors = colmap_benchmark.shallow_results_dataset(
+        point_limit=points_limit,
+        only_trimmed_2d_points=True).compute_reprojection_errors_alt(
+        LossFunction.TRIVIAL_LOSS
+    )
     gds_errors = {
         k: v
         for k, v in gtsam_benchmark.shallow_results_dataset()
@@ -59,9 +63,10 @@ def benchmark_bundle_adjustment(dataset):
     jds_errors_avg = {k: np.mean(v) for k, v in jds_errors.items()}
     cds_errors_avg = {k: np.mean(v) for k, v in cds_errors.items()}
     gds_errors_avg = {k: np.mean(v) for k, v in gds_errors.items()}
-    jaxopt_benchmark.export_results_in_colmap_format(open_in_colmap=True)
-    colmap_benchmark.export_results_in_colmap_format(open_in_colmap=True)
-    gtsam_benchmark.export_results_in_colmap_format(open_in_colmap=True)
+
+    # jaxopt_benchmark.export_results_in_colmap_format(points_limit=jaxopt_benchmark.points_limit, open_in_colmap=True)
+    # colmap_benchmark.export_results_in_colmap_format(points_limit=points_limit, open_in_colmap=True)
+    # gtsam_benchmark.export_results_in_colmap_format(open_in_colmap=True)
     """ DEBUG END"""
 
     """ Save benchmarks """
@@ -73,8 +78,8 @@ def benchmark_bundle_adjustment(dataset):
     return {
         "colmap_time": colmap_benchmark.time,
         "colmap_results": colmap_benchmark.results,
-        "gtsam_time": gtsam_benchmark.time,
-        "gtsam_results": gtsam_benchmark.results,
+        # "gtsam_time": gtsam_benchmark.time,
+        # "gtsam_results": gtsam_benchmark.results,
     }
 
 
