@@ -198,6 +198,7 @@ class JaxoptSinglePoseBenchmarkBatched(SinglePoseBenchmark):
             @parameter batch_size (int, default: 1): specify num of entries processed in parallel.
             Must be divisible by length of datasetEntries.
         """
+        self.benchmark_args_kwargs = (args, kwargs)
         self.setup()
         verbose = kwargs.get("verbose", True)
         batch_size = kwargs.get("batch_size", 1)

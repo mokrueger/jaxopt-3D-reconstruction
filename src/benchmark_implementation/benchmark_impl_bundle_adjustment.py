@@ -49,8 +49,10 @@ def benchmark_bundle_adjustment(dataset):
         )
     )
     cds_errors = colmap_benchmark.shallow_results_dataset(
-        point_limit=points_limit,
-        only_trimmed_2d_points=True).compute_reprojection_errors_alt(
+        points_limit=points_limit,
+        camera_limit=camera_limit,
+        only_trimmed_2d_points=True
+    ).compute_reprojection_errors_alt(
         LossFunction.TRIVIAL_LOSS
     )
     gds_errors = {
@@ -64,8 +66,10 @@ def benchmark_bundle_adjustment(dataset):
     cds_errors_avg = {k: np.mean(v) for k, v in cds_errors.items()}
     gds_errors_avg = {k: np.mean(v) for k, v in gds_errors.items()}
 
-    # jaxopt_benchmark.export_results_in_colmap_format(points_limit=jaxopt_benchmark.points_limit, open_in_colmap=True)
-    # colmap_benchmark.export_results_in_colmap_format(points_limit=points_limit, open_in_colmap=True)
+    # jaxopt_benchmark.export_results_in_colmap_format(points_limit=jaxopt_benchmark.points_limit,
+    #                                                  cameras_limit=camera_limit, open_in_colmap=True)
+    # colmap_benchmark.export_results_in_colmap_format(points_limit=points_limit,
+    #                                                  cameras_limit=camera_limit, open_in_colmap=True)
     # gtsam_benchmark.export_results_in_colmap_format(open_in_colmap=True)
     """ DEBUG END"""
 
@@ -87,8 +91,8 @@ if __name__ == "__main__":
     print("Loading datasets")
     noisy_datasets = [
         REICHSTAG_NOISED_LOADER,
-        SACRE_COEUR_NOISED_LOADER,
-        ST_PETERS_SQUARE_NOISED_LOADER,
+        #  SACRE_COEUR_NOISED_LOADER,
+        #  ST_PETERS_SQUARE_NOISED_LOADER,
     ]
 
     evaluation = []

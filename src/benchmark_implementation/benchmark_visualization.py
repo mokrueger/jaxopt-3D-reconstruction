@@ -4,12 +4,13 @@ from typing import List
 import numpy as np
 from matplotlib import pyplot as plt
 
-from src.benchmark.benchmark import Benchmark, SinglePoseBenchmark
-from src.config import BENCHMARK_SINGLE_POSE_RESULTS_PATH
+from src.benchmark.benchmark import Benchmark, SinglePoseBenchmark, BundleAdjustmentBenchmark
+from src.benchmark.jaxopt_benchmark.benchmark_bundle_adjustment import JaxoptBundleAdjustmentBenchmark
+from src.config import BENCHMARK_SINGLE_POSE_RESULTS_PATH, BENCHMARK_BUNDLE_ADJUSTMENT_RESULTS_PATH
 from src.dataset.loss_functions import LossFunction
 
 
-def save_reprojection_error_histogram(list_of_benchmarks):
+def save_reprojection_error_histogram_single_pose(list_of_benchmarks):
     os.makedirs("../benchmark/evaluation", exist_ok=True)
     os.makedirs(
         f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}",
@@ -50,6 +51,64 @@ def save_reprojection_error_histogram(list_of_benchmarks):
 
     fig.savefig(
         f"evaluation/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}/{list_of_benchmarks[0].NAME.replace(' ', '_').lower() + '_'}"
+        f"reprojection_error_{list_of_benchmarks[0].dataset.name.replace(' ', '').lower()}"
+        f".png"
+    )
+
+
+def save_reprojection_error_histogram_bundle_adjustment(list_of_benchmarks):
+    os.makedirs("../benchmark/evaluation/bundle_adjustment", exist_ok=True)
+    os.makedirs(
+        f"evaluation/bundle_adjustment/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}",
+        exist_ok=True,
+    )
+
+    reprojection_errors = []
+    for benchmark in list_of_benchmarks:
+        if isinstance(benchmark, JaxoptBundleAdjustmentBenchmark):
+            benchmark: JaxoptBundleAdjustmentBenchmark
+            points_limit = benchmark.points_limit
+            camera_limit = benchmark.camera_limit
+        else:
+            args, kwargs = benchmark.benchmark_args_kwargs
+            points_limit = kwargs.get("points_limit")
+            camera_limit = kwargs.get("camera_limit")
+
+        reprojection_error = benchmark.reprojection_errors(
+            loss_function=LossFunction.TRIVIAL_LOSS,
+            points_limit=points_limit,
+            camera_limit=camera_limit
+        )
+        reprojection_errors.append(reprojection_error)
+
+    fig: plt.Figure
+    ax: plt.Axes
+    fig, ax = plt.subplots()
+
+    hist_data = np.histogram(reprojection_errors, bins="auto")
+    # Filter counts of below 1% of top height to get new bins
+    # threshold = np.max(hist_data[0]) * 0.005
+    # indices = np.where(hist_data[0] >= threshold)[0]
+    # bins = hist_data[1][indices]
+    bins = hist_data[1]
+
+    # filtered_reprojection_errors = []
+    # for re in reprojection_errors:
+    #     filtered_reprojection_errors.append(re[np.where(re <= bins[-1] + 5e-01)])
+    filtered_reprojection_errors = reprojection_errors
+
+    for re, b in list(zip(filtered_reprojection_errors, list_of_benchmarks)):
+        ax.hist(re, bins=bins, alpha=1 / len(list_of_benchmarks), label=b.FRAMEWORK)
+        # ax.axvline(re.mean(), color='k', linestyle='dashed', linewidth=1)
+        # min_ylim, max_ylim = ax.get_ylim()
+        # plt.text(re.mean() * 1.1, max_ylim * 0.9, 'Mean: {:.2f}'.format(re.mean()))
+    ax.set_xlabel(f"Squared reprojection error")
+    ax.set_ylabel("Count")
+    ax.legend(loc="upper right")
+    ax.set_title(f"SinglePoseBenchmark ({list_of_benchmarks[0].dataset.name})")
+
+    fig.savefig(
+        f"evaluation/bundle_adjustment/{list_of_benchmarks[0].dataset.name.replace(' ', '_').lower()}/{list_of_benchmarks[0].NAME.replace(' ', '_').lower() + '_'}"
         f"reprojection_error_{list_of_benchmarks[0].dataset.name.replace(' ', '').lower()}"
         f".png"
     )
@@ -222,7 +281,7 @@ def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
     fig, ax = plt.subplots()
     cams = list(range(len(list_of_benchmarks[0].dataset.datasetEntries)))
     for index, b in enumerate(
-        list_of_benchmarks
+            list_of_benchmarks
     ):  # Note this does not work if batch_size != 1 for now
         ax.bar(
             np.array(cams) + 0.25 * index, b.iterations, label=b.FRAMEWORK, width=0.25
@@ -269,7 +328,7 @@ def save_iteration_plot(list_of_benchmarks: List[SinglePoseBenchmark]):
 
 
 def single_pose_statistics(list_of_benchmarks: List[SinglePoseBenchmark]):
-    save_reprojection_error_histogram(list_of_benchmarks)
+    save_reprojection_error_histogram_single_pose(list_of_benchmarks)
     save_runtime_plot(list_of_benchmarks)
     save_iteration_plot(list_of_benchmarks)
     #  if any([isinstance(b, JaxoptSinglePoseBenchmark) for b in list_of_benchmarks]):
@@ -280,8 +339,16 @@ def single_pose_statistics(list_of_benchmarks: List[SinglePoseBenchmark]):
     #  jaxopt_benchmark.export_results_in_colmap_format(open_in_colmap=True)
 
 
+def bundle_adjustment_statistics(list_of_benchmarks: List[BundleAdjustmentBenchmark]):
+    save_reprojection_error_histogram_bundle_adjustment(list_of_benchmarks)
+
+
 if __name__ == "__main__":
-    latest_single_pose_benchmarks = Benchmark.load_pickle_folder(
-        os.path.join(BENCHMARK_SINGLE_POSE_RESULTS_PATH, "latest")
+    # latest_single_pose_benchmarks = Benchmark.load_pickle_folder(
+    #     os.path.join(BENCHMARK_SINGLE_POSE_RESULTS_PATH, "latest")
+    # )
+    latest_bundle_adjustment_benchmarks = Benchmark.load_pickle_folder(
+        os.path.join(BENCHMARK_BUNDLE_ADJUSTMENT_RESULTS_PATH, "latest")
     )
-    single_pose_statistics(latest_single_pose_benchmarks)
+    #  single_pose_statistics(latest_single_pose_benchmarks)
+    bundle_adjustment_statistics(latest_bundle_adjustment_benchmarks[0:2])

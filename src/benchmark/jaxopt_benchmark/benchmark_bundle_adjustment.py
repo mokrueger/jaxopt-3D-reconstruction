@@ -147,6 +147,7 @@ class JaxoptBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         @type points_limit: int; specify for reduced dataset
         """
         verbose = kwargs.get("verbose", False)
+        self.benchmark_args_kwargs = (args, kwargs)
 
         # No defaults; will raise errors if not set
         camera_limit = kwargs["camera_limit"]

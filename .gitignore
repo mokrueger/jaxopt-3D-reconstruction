@@ -167,3 +167,4 @@ benchmark_results/*/*/*.pkl
 /src/benchmark/jaxopt_benchmark/export_results/*
 /src/benchmark_implementation/export_results/
 /src/benchmark_implementation/export_results/*
+/src/benchmark_implementation/evaluation/

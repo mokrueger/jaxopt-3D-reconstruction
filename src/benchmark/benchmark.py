@@ -5,7 +5,7 @@ import pickle
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Union
+from typing import Dict, Union, Tuple, List
 from uuid import uuid4
 
 import numpy as np
@@ -27,6 +27,7 @@ class Benchmark(ABC):
 
     def __init__(self, dataset: Dataset):
         self.dataset = dataset
+        self.benchmark_args_kwargs: Tuple[List, Dict] = ([], {})
 
     @abstractmethod
     def benchmark(self, *args, **kwargs):
@@ -184,8 +185,10 @@ class SinglePoseBenchmark(Benchmark, ABC):
         raise AttributeError
 
     def export_results_in_colmap_format(
-            self, output_path="export_results/" + str(uuid4()), open_in_colmap=False
+            self, output_path=None, open_in_colmap=False
     ):
+        if not output_path:
+            output_path = "export_results/" + str(uuid4())
         os.makedirs(output_path, exist_ok=True)
         shallow_results_dataset = self.shallow_results_dataset()
         export_in_colmap_format(shallow_results_dataset, output_path, binary=True)
@@ -368,73 +371,111 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         self._time = copy.deepcopy(items[1])
         self._iterations = copy.deepcopy(items[2])
 
-    def shallow_results_dataset(self, point_limit=-1, only_trimmed_2d_points=False):
+    def _shallow_results_dataset(self):
+        """ Function for complete results """
         # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
         # Shallow copy(!) is enough to export, but be really careful here
+
+        if not self._results:
+            raise AttributeError
+
+        assert len(self._results.point_mapping) == len(self.dataset.points3D), \
+            "number of points3D must be equal"
+        assert len(self._results.camera_mapping) == len(self.dataset.datasetEntries), \
+            "number of cameras must be equal"
+
         copied_dataset = copy.copy(self.dataset)
+        copied_dataset.datasetEntries = list(
+            map(lambda x: copy.copy(x), copy.copy(copied_dataset.datasetEntries))
+        )
+        copied_dataset.points3D = list(self._results.point_mapping.values())
+        copied_dataset.refresh_mapping()
+
+        #  Since only the camera changes we can substitute it with the by the new cameras
+        camera_mapping = self._results.camera_mapping
+        for index, de in enumerate(copied_dataset.datasetEntries):
+            de.camera = camera_mapping.get(index)
+            assert de.camera is not None, \
+                "something wrong happened in the camera_mapping"
+
+        copied_dataset.refresh_mapping()
+        return copied_dataset
+
+    def _shallow_reduced_results_dataset(self, points_limit, camera_limit, only_trimmed_2d_points):
+        """for reduced datasets mostly only for testing"""
+
+        # Note: everything (excluding cameras, and 3d_points) points to the original dataset(!!)
+        # Shallow copy(!) is enough to export, but be really careful here
+        def _replace_point_with_p3d_id_none(de_points2d, ind):
+            # Point got lost due to reduced dataset for debug test
+            mod_point = copy.deepcopy(de_points2d[ind])
+            mod_point.point3D_identifier = None
+            # Note: the list is a new object, created by copy.copy(...)
+            de_points2d[ind] = mod_point
+
+        if not self._results:
+            raise AttributeError
+
+        assert len(self._results.camera_mapping) == camera_limit, \
+            "not enough cameras found in the results"
+
+        copied_dataset = copy.copy(self.dataset)
+        copied_dataset.datasetEntries = list(
+            map(lambda x: copy.copy(x), copy.copy(copied_dataset.datasetEntries))
+        )
+
+        copied_dataset.points3D = list(self._results.point_mapping.values())
+        copied_dataset.refresh_mapping()
+
+        copied_dataset.datasetEntries = copied_dataset.datasetEntries[:camera_limit]
+
+        # Since only the camera changes we can substitute it with the by the new cameras
+        camera_mapping = self._results.camera_mapping
+        point_2d_ids_per_dataset_entry = self.dataset.get_reduced_dataset_2d_ids_per_camera(
+            cameras_limit=camera_limit,
+            points_limit=points_limit
+        )
+
+        for index, de in enumerate(copied_dataset.datasetEntries):
+            de.camera = camera_mapping.get(index)
+            assert de.camera is not None, f"camera index: {index} had no camera"
+
+            # Replace list by shallow copy, points are still -> orig. dataset
+            de.points2D = copy.copy(de.points2D)
+
+            if only_trimmed_2d_points:
+                ids_of_reduced_set_of_points = point_2d_ids_per_dataset_entry[index]
+                list_of_ids_to_keep = ids_of_reduced_set_of_points
+            else:
+                list_of_ids_with_points_3d = [p.identifier for p in de.points2D
+                                              if copied_dataset.points3D_mapped.get(p.point3D_identifier)]
+                list_of_ids_to_keep = list_of_ids_with_points_3d
+
+            for i in range(len(de.points2D)):
+                """ we set the p3d identifier to none if its not in the list_to_keep but has a p3d_identifier """
+                if de.points2D[i].identifier not in list_of_ids_to_keep and de.points2D[i].point3D_identifier:
+                    _replace_point_with_p3d_id_none(de.points2D, i)
+
+        copied_dataset.refresh_mapping()
+        return copied_dataset
+
+    def shallow_results_dataset(self, points_limit=None, camera_limit=None, only_trimmed_2d_points=True):
+        if not self._results:
+            raise AttributeError
+
+        if not points_limit and not camera_limit:
+            return self._shallow_results_dataset()
+
+        assert points_limit and camera_limit, "points_limit and camera_limit have to be set at the same time"
+        return self._shallow_reduced_results_dataset(
+            points_limit=points_limit,
+            camera_limit=camera_limit,
+            only_trimmed_2d_points=only_trimmed_2d_points
+        )
+
+    def reprojection_errors(self, loss_function, points_limit, camera_limit):
         if self._results:
-
-            copied_dataset.datasetEntries = list(
-                map(lambda x: copy.copy(x), copy.copy(copied_dataset.datasetEntries))
-            )
-
-            copied_dataset.points3D = list(self._results.point_mapping.values())
-            copied_dataset.refresh_mapping()
-
-            if point_limit != -1:
-                """for reduced datasets only for testing"""
-                copied_dataset.datasetEntries = copied_dataset.datasetEntries[
-                    0 : len(self._results.camera_mapping)
-                ]
-
-            # Since only the camera changes we can substitute it with the by the new cameras
-            camera_mapping = self._results.camera_mapping
-            for index, de in enumerate(copied_dataset.datasetEntries):
-                de.camera = camera_mapping.get(index)
-                """For reduced datasets (for our test) we modify point2D identifiers"""
-                if point_limit != -1:
-                    # Replace list by shallow copy, points are still -> orig. dataset
-                    de.points2D = copy.copy(de.points2D)
-                    if only_trimmed_2d_points:
-                        """ We remove all p3d identifiers from points who were not used in the optimization """
-                        ids_of_reduced_set_of_points = [p.identifier for p in de.points_with_3d()[:point_limit]]
-                        for i in range(len(de.points2D)):
-                            if de.points2D[i].identifier not in ids_of_reduced_set_of_points:
-                                # Point got lost due to reduced dataset for debug test
-                                mod_point = copy.deepcopy(de.points2D[i])
-                                mod_point.point3D_identifier = None
-                                # Note: the list is a new object, created by copy.copy(...)
-                                de.points2D[i] = mod_point
-                            else:
-                                identifier = de.points2D[i].point3D_identifier
-                                if identifier and not copied_dataset.points3D_mapped.get(identifier):
-                                    # Point got lost due to reduced dataset for debug test
-                                    mod_point = copy.deepcopy(de.points2D[i])
-                                    mod_point.point3D_identifier = None
-                                    # Note: the list is a new object, created by copy.copy(...)
-                                    de.points2D[i] = mod_point
-
-                    else:
-                        """ We keep all p3d identifiers from p2d as long as they had a p3d used in the optimization """
-                        for i in range(len(de.points2D)):
-                            if de.points2D[i].point3D_identifier:
-                                try:
-                                    copied_dataset.points3D_mapped[de.points2D[i].point3D_identifier]
-                                except KeyError:
-                                    # Point got lost due to reduced dataset for debug test
-                                    mod_point = copy.deepcopy(de.points2D[i])
-                                    mod_point.point3D_identifier = None
-                                    # Note: the list is a new object, created by copy.copy(...)
-                                    de.points2D[i] = mod_point
-                """end"""
-
-            copied_dataset.refresh_mapping()
-            return copied_dataset
-        raise AttributeError
-
-    def reprojection_errors(self, loss_function):  # TODO: note: copied from above
-        if self._results:
-            dataset = self.shallow_results_dataset()
+            dataset = self.shallow_results_dataset(points_limit=points_limit, camera_limit=camera_limit)
             reprojection_errors = dataset.compute_reprojection_errors_alt(
                 loss_function=loss_function
             )
@@ -449,11 +490,13 @@ class BundleAdjustmentBenchmark(Benchmark, ABC):
         raise AttributeError
 
     def export_results_in_colmap_format(
-            self, points_limit=-1, output_path="export_results/" + str(uuid4()), open_in_colmap=False
+            self, points_limit=None, cameras_limit=None, output_path=None, open_in_colmap=False
     ):
         # TODO: note: copied from above, can be refactored into benchmark class
+        if not output_path:
+            output_path = "export_results/" + str(uuid4())
         os.makedirs(output_path, exist_ok=True)
-        shallow_results_dataset = self.shallow_results_dataset(point_limit=points_limit)
+        shallow_results_dataset = self.shallow_results_dataset(points_limit=points_limit, camera_limit=cameras_limit)
         export_in_colmap_format(shallow_results_dataset, output_path, binary=True)
         if open_in_colmap:
             show_in_colmap(

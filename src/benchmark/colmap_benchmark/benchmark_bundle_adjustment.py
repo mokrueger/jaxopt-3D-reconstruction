@@ -30,6 +30,7 @@ class ColmapBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
         @type camera_limit: int; specify for reduced dataset
         @type points_limit: int; specify for reduced dataset
         """
+        self.benchmark_args_kwargs = (args, kwargs)
         verbose = kwargs.get("verbose", False)
         camera_limit = kwargs.get("camera_limit", -1)
         points_limit = kwargs.get("points_limit", -1)

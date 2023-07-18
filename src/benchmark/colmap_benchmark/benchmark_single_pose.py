@@ -188,8 +188,14 @@ class ColmapSinglePoseBenchmark(SinglePoseBenchmark):
             )
         )
 
-    def benchmark(self, verbose=False):
+    def benchmark(self, *args, **kwargs):
+        """
+        @type verbose: bool; specify verbosity
+        """
+        verbose = kwargs.get("verbose", False)
+        self.benchmark_args_kwargs = (args, kwargs)
         # TODO: Different ids could be a problem, perhaps switch to datasetEntry.identifier-based mapping
+        self.benchmark_args_kwargs = (args, kwargs)
         mapping_2d_3d_by_id = self._prepare_dataset()
         mapping_cameras_by_id = self._prepare_cameras()
         mapping_colmap_cameras_by_id = self._prepare_colmap_cameras(

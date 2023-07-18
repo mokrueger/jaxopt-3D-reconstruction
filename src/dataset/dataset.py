@@ -169,26 +169,24 @@ class Dataset:
             ), self.datasetEntries))
         )
 
-    def make_reduced_dataset(self, camera_limit, points_limit, min_track_length=2):
+    def make_reduced_dataset(self, camera_limit, points_limit):
         """ WARNING: THIS RETURNS A SHALLOW COPY. MOST OBJECT REFERENCE STUFF IN THE ORIGINAL DATASET """
         shallow_dataset = copy.copy(self)
         shallow_dataset.datasetEntries = [copy.copy(de) for de in self.datasetEntries[: camera_limit]]
-        points_3D_by_camera_limit_times_cameras_sorted = sorted(
+        points_3d_by_camera_limit_times_cameras_sorted = sorted(
             list(Counter([p3d for d_entry in shallow_dataset.datasetEntries for p2d, p3d in
                           d_entry.map2d_3d(self.points3D_mapped)[: points_limit]]).items())
             , key=lambda x: x[1]
         )
-        shallow_dataset.points3D = [x[0] for x in points_3D_by_camera_limit_times_cameras_sorted if
-                                    x[1] >= min_track_length]
-        point3D_ids = [p.identifier for p in shallow_dataset.points3D]
-        # shallow_dataset.points3D = [p3d for d_entry in shallow_dataset.datasetEntries for p2d, p3d in
-        #                             d_entry.map2d_3d(dataset.points3D_mapped)[: points_limit]]
+        shallow_dataset.points3D = [x[0] for x in points_3d_by_camera_limit_times_cameras_sorted if
+                                    x[1] >= 2]
+        point3d_ids = [p.identifier for p in shallow_dataset.points3D]
 
         shallow_dataset.refresh_mapping()
 
         for de in shallow_dataset.datasetEntries:
             point_ids_we_want = [p.identifier for p in de.points_with_3d()[: points_limit]
-                                 if p.point3D_identifier in point3D_ids]
+                                 if p.point3D_identifier in point3d_ids]
 
             # Shallow copy of list
             de.points2D = copy.copy(de.points2D)
@@ -201,3 +199,20 @@ class Dataset:
             de.refresh_mapping()
 
         return shallow_dataset
+
+    def get_reduced_dataset_2d_ids_per_camera(self, cameras_limit, points_limit, as_list=False):
+        points_3d_by_camera_limit_times_cameras_sorted = sorted(
+            list(Counter([p3d for d_entry in self.datasetEntries[:cameras_limit] for p2d, p3d in
+                          d_entry.map2d_3d(self.points3D_mapped)[: points_limit]]).items())
+            , key=lambda x: x[1]
+        )
+        point3d_ids = [x[0].identifier for x in points_3d_by_camera_limit_times_cameras_sorted
+                       if x[1] >= 2]
+        res = {
+            index: [p.identifier for p in de.points_with_3d()[: points_limit]
+                    if p.point3D_identifier in point3d_ids]
+            for index, de in enumerate(self.datasetEntries[:cameras_limit])
+        }
+        if as_list:
+            return list(res.values())
+        return res

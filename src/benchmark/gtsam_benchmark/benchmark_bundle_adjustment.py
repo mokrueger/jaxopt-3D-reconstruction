@@ -36,7 +36,8 @@ X = symbol_shorthand.X
 
 
 class GtsamBundleAdjustmentBenchmark(BundleAdjustmentBenchmark):
-    def benchmark(self, args=None):
+    def benchmark(self, *args, **kwargs):
+        self.benchmark_args_kwargs = (args, kwargs)
         graph = NonlinearFactorGraph()
 
         initial_estimate = Values()
