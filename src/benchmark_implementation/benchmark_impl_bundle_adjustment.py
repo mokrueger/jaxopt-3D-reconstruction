@@ -42,7 +42,7 @@ def benchmark_bundle_adjustment(dataset):
 
     jds_errors = (
         jaxopt_benchmark.shallow_results_dataset(
-            point_limit=jaxopt_benchmark.points_limit,
+            points_limit=jaxopt_benchmark.points_limit,
             only_trimmed_2d_points=True
         ).compute_reprojection_errors_alt(
             LossFunction.TRIVIAL_LOSS
